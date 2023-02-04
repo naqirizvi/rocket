@@ -1,0 +1,111 @@
+<?php
+if ($_GET['pass'] != 'SECRET')
+{
+  @unlink(__FILE__);
+  die("Unauthorized Access");
+}
+if (isset($_POST['SubmitButton'])){
+ @unlink(__FILE__);
+}
+// Dummy plugin dir so that no plugins are loaded as they conflict with our login process
+define('WPMU_PLUGIN_DIR', '/home/x11kccb/public_html/n9ssxezpiewgnhkkbd3yyduz9uaechzr');
+define('WP_PLUGIN_DIR', '/home/x11kccb/public_html/n9ssxezpiewgnhkkbd3yyduz9uaechzr');
+define('WP_USE_THEMES', false);
+
+// Some themes check the current login script name
+$_SERVER['SCRIPT_NAME'] = '/wp-login.php';
+
+require ('wp-blog-header.php');
+require ('wp-includes/pluggable.php');
+
+// If the user is already logged in simply redirect to admin page
+if (!is_user_logged_in()){
+  $signon_user = '';
+  //Backword compatibility ($__setting['signon_username'] won't be there in previous versions <= 5.2.3)
+  if (!empty($signon_user) && !preg_match('/^\[\[(.*?)\]\]$/is', $signon_user))
+  {
+      $user = get_user_by('login', $signon_user);
+  }
+  else
+  {
+    if (isset($_POST['SubmitButton']))
+    {
+      $user_id = $_POST['user_id'];
+      $message = "Logging in as user " . $user_id;
+      $user_info = get_userdata($user_id);
+      $username = $user_info->user_login;
+      $user = get_user_by('login', $username);
+      // Create the session
+      if (!is_wp_error($user))
+      {
+        wp_clear_auth_cookie();
+        wp_set_current_user($user->ID);
+        wp_set_auth_cookie($user->ID);
+        if (file_exists(dirname(__FILE__) . '/wp-content/plugins/wp-simple-firewall'))
+        {
+          try
+          {
+            global $wpdb;
+            $wpsf_session_id = md5(uniqid('icwp-wpsf'));
+            $wpdb->insert($wpdb->prefix . "icwp_wpsf_sessions", array(
+              "session_id" => $wpsf_session_id,
+              "wp_username" => $user->user_login,
+              "ip" => $_SERVER['REMOTE_ADDR'],
+              "browser" => md5($_SERVER['HTTP_USER_AGENT']) ,
+              "last_activity_uri" => "/wp-login.php",
+              "logged_in_at" => time() ,
+              "last_activity_at" => time() ,
+              "login_intent_expires_at" => 0,
+              "secadmin_at" => 0,
+              "created_at" => time() ,
+              "deleted_at" => 0,
+            ));
+            setcookie("wp-icwp-wpsf", $wpsf_session_id, time() + DAY_IN_SECONDS * 30);
+          }
+          catch(Exception $e)
+          {
+          }
+        }
+      }
+    }
+    else
+    {
+      $user_fields = array(
+          'ID',
+          'user_login',
+          'user_email'
+      );
+      $user_query = new WP_User_Query(array(
+          'role' => 'Administrator',
+          'fields' => $user_fields
+      ));
+      if (!empty($user_query->get_results()))
+      {
+      ?>
+      <body>
+        <form method="post">
+          <select name="user_id" id="user_id">
+          <option selected="selected">Choose one</option>
+          <?php
+          foreach ($user_query->get_results() as $user)
+          {
+          echo "<option value='$user->ID'> $user->ID - $user->user_login -  $user->user_email</option>";
+          }
+          ?>
+          </select>
+          <input type="submit" value="Submit" name="SubmitButton">
+        </form>
+      </body>
+      <?php
+      }
+      else
+      {
+        echo 'No admin users found.';
+      }
+    return;
+    }
+  }
+}
+$redirect_to = admin_url();
+wp_safe_redirect( $redirect_to );
+exit();

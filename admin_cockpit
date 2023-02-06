@@ -779,8 +779,9 @@ $1 Migration
 ++++++++++++++++++++
 _EOF_
 read -rep 'Please provide Source Host: ' mgHost
-read -rep 'Please provide SSH User: ' mgUser
 read -rep 'Please provide SSH Port [22]: ' mgPort
+read -rep 'Please provide SSH User: ' mgUser
+read -rep 'Please provide SSH Password: ' mgPass
 read -rep 'Please provide Domain: ' mgDomain
 read -rep 'Please provide Webroot: ' mgRoot
 mgPort=${mgPort:-22}
@@ -788,14 +789,13 @@ if [ $mgPort > 22 ]; then #whitelist port if < 22
  openport $mgPort
 fi
 echo "Runnign Command: ssh $mgUser@$mgHost -p $mgPort"
-ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
-pwd
 echo '==========================================================================================='
-echo 'Table Prefix' && prefix=\$(wp config get table_prefix)
+echo 'Path:' && pwd
+echo 'Table Prefix:' && prefix=\$(wp config get table_prefix) && echo \$prefix
 echo \$prefix > .table_prefix
 echo '==========================================================================================='
-sleep .8
 wp db export rocketdb.sql 2> /dev/null
 EOF
 if [ ! $? -eq 0 ]; then
@@ -806,7 +806,7 @@ url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/publ
 su - $user -s /usr/bin/bash -- << EOF
 echo "Info: Migrating to site $url"
 echo "Info: Accessing remote Host for Rsync"
-rsync -avz --ignore-existing --exclude wp-config.php -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-config.php --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
 echo "Info: Taking Database Backup"
 $phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
 prefix=$(cat .table_prefix)
@@ -822,7 +822,7 @@ EOF
 if [ ! $? -eq 0 ]; then
  exit 1
 fi
-ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
 rm rocketdb.sql
 EOF
@@ -1280,7 +1280,7 @@ https://tiptopclean.eu/wp-content/ai1wm-backups/tiptopclean.eu-20230123-112234-4
 home739918234.1and1-data.host
 u93776300
 @Blablacar2018
-
+https://laskateboarderie.com
 _EOF_
 exit 0
     ;;

@@ -545,7 +545,7 @@ then
 #dbuser=$(/usr/local/bin/php -r  "\$data=reset(unserialize(file_get_contents('/home/$USER/.softaculous/installations.php')));echo \$data[softdbuser];")
 dbuser=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | head -3 | head -1)
 dbpass=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | head -3 | tail -1)
-echo 'Fixing Database credentials for Production:';
+echo -e "${NORMAL}${GREY}INFO:     Fixing Database credentials for Production${NC}";
 /usr/local/bin/php /usr/local/bin/wp option get home --skip-plugins --skip-themes
 /usr/local/bin/php /usr/local/bin/wp config set DB_USER "$dbuser" --skip-plugins --skip-themes
 /usr/local/bin/php /usr/local/bin/wp config set DB_NAME "$dbuser" --skip-plugins --skip-themes
@@ -555,7 +555,7 @@ echo 'Fixing Database credentials for Production:';
 if [ $(/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php --list_ins --count=1) == 2 ];then
 dbuser=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | tail -3 | head -1)
 dbpass=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | tail -3 | tail -1)
-echo 'Fixing Database credentials for Staging:';
+echo -e "${NORMAL}${GREY}INFO:     Fixing Database credentials for Staging${NC}";
 /usr/local/bin/php /usr/local/bin/wp option get home --skip-plugins --skip-themes
 /usr/local/bin/php /usr/local/bin/wp config set DB_USER "$dbuser" --skip-plugins --skip-themes
 /usr/local/bin/php /usr/local/bin/wp config set DB_NAME "$dbuser" --skip-plugins --skip-themes
@@ -564,10 +564,10 @@ echo 'Fixing Database credentials for Staging:';
 fi
 
 else
-echo 'Error: Wordpress Installation not found'
+print_out error 'Wordpress Installation not found'
 fi
 else
-echo 'Error: Softaculous Installation not found'
+print_out error 'Error: Softaculous Installation not found'
 fi
 EOF
 }
@@ -802,22 +802,23 @@ EOF
 url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
 print_out info "Migrating to site $url"
 print_out info "Accessing remote Host for Rsync"
-sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-config.php --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
 reset_permissions
+fix_db_credentials
 su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html/
 echo -e "${NORMAL}${GREY}INFO:     Importing Database Backup${NC}"
-$phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
+$phpbin $wpbin db import $webroot/rocketdb.sql $wpcliopt
 prefix=\$(cat .table_prefix)
 echo -e "${NORMAL}${GREY}INFO:     Updating Prefix to $prefix${NC}"
 $phpbin $wpbin config set table_prefix "$prefix"
-echo -e "${NORMAL}${GREY}INFO:     Running Search & Replace${NC}"
-$phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
+echo -e "${NORMAL}${GREY}INFO:     Running Search & Replace:$mgDomain -> $url${NC}"
+$phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only $wpcliopt
 echo -e "${NORMAL}${GREY}INFO:     Clearing Cache${NC}"
-$phpbin $wpbin cache flush --path=$webroot $wpcliopt && $phpbin $wpbin rewrite flush --path=$webroot $wpcliopt && rm -rf wp-content/cache
+$phpbin $wpbin cache flush $wpcliopt && $phpbin $wpbin rewrite flush $wpcliopt && rm -rf wp-content/cache
 echo -e "${NORMAL}${GREY}INFO:     Removing rocketdb.sql${NC}"
-rm /home/$user/public_html/rocketdb.sql
+rm rocketdb.sql
 EOF
-if [ ! $? -eq 0 ]; then exit 1; fi
 sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
 rm rocketdb.sql .table_prefix
@@ -868,11 +869,13 @@ cpanel_sso(){
 
 ###Linux permission reset
 function reset_permissions(){
-  print_out 'info' "Resetting Permissions for $user"
-  find /home/$user/public_html/ -type f -exec chmod 644 {} \;
-  find /home/$user/public_html/ -type d -exec chmod 755 {} \;
+  print_out info "Resetting Permissions for $user"
+  #find /home/$user/public_html/ -type f -exec chmod 644 {} \;
+  find /home/$user/public_html/ -type f -print0 | xargs -0 chmod 644 
+  find /home/$user/public_html/ -type d -print0 | xargs -0 chmod 755  
+  #find /home/$user/public_html/ -type d -exec chmod 755 {} \;
   chown -R $user:$user /home/$user/public_html/
-  print_out 'success' "Permission Reset Complete."
+  print_out success "Permission Reset Complete"
 }
 
 ###Setup Cron
@@ -1278,6 +1281,7 @@ home739918234.1and1-data.host
 u93776300
 @Blablacar2018
 https://laskateboarderie.com
+/kunden/homepages/7/d739918234/htdocs/clickandbuilds/WordPress/Blog
 _EOF_
 exit 0
     ;;

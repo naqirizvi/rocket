@@ -781,7 +781,7 @@ _EOF_
 read -rep 'Please provide Source Host: ' mgHost
 read -rep 'Please provide SSH Port [22]: ' mgPort
 read -rep 'Please provide SSH User: ' mgUser
-read -rep 'Please provide SSH Password: ' mgPass
+read -s -p 'Please provide SSH Password: ' mgPass
 read -rep 'Please provide Domain: ' mgDomain
 read -rep 'Please provide Webroot: ' mgRoot
 mgPort=${mgPort:-22}
@@ -794,10 +794,10 @@ cd $mgRoot
 echo '==========================================================================================='
 echo 'Path:' && pwd
 echo 'Table Prefix:' && prefix=\$(wp config get table_prefix) && echo \$prefix
-echo \$prefix > .table_prefix
+cat "\$prefix" > .table_prefix
 echo '==========================================================================================='
 wp db export rocketdb.sql 2> /dev/null
-echo "INFO: Securing Permissions on Source Host"
+echo -e "${NORMAL}${GREY}INFO:     Securing Permissions on Source Host${NC}"
 chmod 400 rocketdb.sql .table_prefix
 EOF
 if [ ! $? -eq 0 ]; then exit 1; fi
@@ -805,10 +805,7 @@ url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/publ
 print_out info "Migrating to site $url"
 print_out info "Accessing remote Host for Rsync"
 sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-config.php --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
-
 reset_permissions
-if [ ! $? -eq 0 ]; then exit 1; fi
-
 su - $user -s /usr/bin/bash -- << EOF
 echo "INFO: Importing Database Backup"
 $phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
@@ -877,6 +874,7 @@ function reset_permissions(){
   print_out 'info' "Resetting Permissions for $user"
   find /home/$user/public_html/ -type f -exec chmod 644 {} \;
   find /home/$user/public_html/ -type d -exec chmod 755 {} \;
+  chown -R $user:$user /home/$user/public_html/
   print_out 'success' "Permission Reset Complete."
 }
 

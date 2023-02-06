@@ -788,12 +788,12 @@ mgPort=${mgPort:-22}
 if [ $mgPort != 22 ]; then #whitelist port if < 22
  openport $mgPort
 fi
-echo "Runnign Command: ssh $mgUser@$mgHost -p $mgPort"
+print_out info "Runnign Command: ssh $mgUser@$mgHost -p $mgPort ${NC}"
 sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
 echo '==========================================================================================='
-echo 'Path:' && pwd
-echo 'Table Prefix:' && prefix=\$(wp config get table_prefix) &&  echo "\$prefix" | tee .table_prefix
+printf 'Path:' && pwd
+printf 'Table Prefix:' && prefix=\$(wp config get table_prefix) &&  echo "\$prefix" | tee .table_prefix
 echo '==========================================================================================='
 wp db export rocketdb.sql 2> /dev/null
 echo -e "${NORMAL}${GREY}INFO:     Securing Permissions on Source Host${NC}"
@@ -810,8 +810,8 @@ cd /home/$user/public_html/
 echo -e "${NORMAL}${GREY}INFO:     Importing Database Backup${NC}"
 $phpbin $wpbin db import $webroot/rocketdb.sql $wpcliopt
 prefix=\$(cat .table_prefix)
-echo -e "${NORMAL}${GREY}INFO:     Updating Prefix to $prefix${NC}"
-$phpbin $wpbin config set table_prefix "$prefix"
+echo -e "${NORMAL}${GREY}INFO:     Updating Prefix to \$prefix${NC}"
+$phpbin $wpbin config set table_prefix "\$prefix"
 echo -e "${NORMAL}${GREY}INFO:     Running Search & Replace:$mgDomain -> $url${NC}"
 $phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only $wpcliopt
 echo -e "${NORMAL}${GREY}INFO:     Clearing Cache${NC}"

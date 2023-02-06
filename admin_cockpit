@@ -124,7 +124,7 @@ cat <<_EOF_
      (2) DNS Lookup                                (8) MySQL Disk by Database
      (3) Header, Redirect, Cache & TTFB checker    (9) MySQL Disk by Tables
 
-------------------------------------------------------------------------------- Version 0.6 -----
+------------------------------------------------------------------------------- Version 0.6.1 ----
 _EOF_
 else
 cat <<_EOF_
@@ -792,17 +792,19 @@ print_out info "Runnign Command: ssh $mgUser@$mgHost -p $mgPort ${NC}"
 sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
 echo '==========================================================================================='
+printf 'Site:' && wp option get home
 printf 'Path:' && pwd
-printf 'Table Prefix:' && prefix=\$(wp config get table_prefix) &&  echo "\$prefix" | tee .table_prefix
+printf 'Prefix:' && prefix=\$(wp config get table_prefix) &&  echo "\$prefix" | tee .table_prefix
 echo '==========================================================================================='
+echo -e "${NORMAL}${GREY}INFO:     Exporting Database Backup${NC}"
 wp db export rocketdb.sql 2> /dev/null
 echo -e "${NORMAL}${GREY}INFO:     Securing Permissions on Source Host${NC}"
 chmod 400 rocketdb.sql .table_prefix
 EOF
-url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
+url=$(su - $user -s /usr/bin/bash -c "$phpbin $wpbin option get home --path=$webroot")
 print_out info "Migrating to site $url"
-print_out info "Accessing remote Host for Rsync"
-sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+print_out info "Accessing Remote Host for Rsync"
+sshpass -p $mgPass rsync -avz --info=progress2 --info=name0 --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
 reset_permissions
 fix_db_credentials
 su - $user -s /usr/bin/bash -- << EOF
@@ -824,6 +826,7 @@ cd $mgRoot
 rm rocketdb.sql .table_prefix
 EOF
 print_out success "Migration Completed"
+exit 0
 }
 #####################MIGRATION STOP
 

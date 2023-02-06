@@ -781,7 +781,7 @@ _EOF_
 read -rep 'Please provide Source Host: ' mgHost
 read -rep 'Please provide SSH Port [22]: ' mgPort
 read -rep 'Please provide SSH User: ' mgUser
-read -s -p 'Please provide SSH Password: ' mgPass
+read -sep 'Please provide SSH Password: ' mgPass
 read -rep 'Please provide Domain: ' mgDomain
 read -rep 'Please provide Webroot: ' mgRoot
 mgPort=${mgPort:-22}
@@ -793,31 +793,28 @@ sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'b
 cd $mgRoot
 echo '==========================================================================================='
 echo 'Path:' && pwd
-echo 'Table Prefix:' && prefix=\$(wp config get table_prefix) && echo \$prefix
-cat "\$prefix" > .table_prefix
+echo 'Table Prefix:' && prefix=\$(wp config get table_prefix) &&  echo "\$prefix" | tee .table_prefix
 echo '==========================================================================================='
 wp db export rocketdb.sql 2> /dev/null
 echo -e "${NORMAL}${GREY}INFO:     Securing Permissions on Source Host${NC}"
 chmod 400 rocketdb.sql .table_prefix
 EOF
-if [ ! $? -eq 0 ]; then exit 1; fi
 url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
 print_out info "Migrating to site $url"
 print_out info "Accessing remote Host for Rsync"
 sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-config.php --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
 reset_permissions
 su - $user -s /usr/bin/bash -- << EOF
-echo "INFO: Importing Database Backup"
+echo -e "${NORMAL}${GREY}INFO:     Importing Database Backup${NC}"
 $phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
-if [ ! $? -eq 0 ]; then exit 1; fi
 prefix=\$(cat .table_prefix)
-echo "INFO: Updating Prefix to $prefix"
+echo -e "${NORMAL}${GREY}INFO:     Updating Prefix to $prefix${NC}"
 $phpbin $wpbin config set table_prefix "$prefix"
-echo "INFO: Running Search & Replace"
+echo -e "${NORMAL}${GREY}INFO:     Running Search & Replace${NC}"
 $phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
-echo "INFO: Clearing Cache"
+echo -e "${NORMAL}${GREY}INFO:     Clearing Cache${NC}"
 $phpbin $wpbin cache flush --path=$webroot $wpcliopt && $phpbin $wpbin rewrite flush --path=$webroot $wpcliopt && rm -rf wp-content/cache
-echo "INFO: Removing rocketdb.sql"
+echo -e "${NORMAL}${GREY}INFO:     Removing rocketdb.sql${NC}"
 rm /home/$user/public_html/rocketdb.sql
 EOF
 if [ ! $? -eq 0 ]; then exit 1; fi

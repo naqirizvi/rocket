@@ -1,0 +1,1289 @@
+#!/bin/bash
+################################################################
+#                                                              #
+# 11/01/2023 Naqi Rizvi.                                       #
+# Change History                                               #
+#                                                              #
+################################################################
+################################################################
+################################################################
+#                                                              #
+# Copyright (C) 2011, 2023 Naqi Rizvi                          #
+# mohammednaqi@gmail.com                                       #
+#                                                              #
+# This program is free software; you can redistribute it       #
+# and/or modify it under the terms of the GNU General Public   #
+# License as published by the Free Software Foundation;        #
+# either version 2 of the License, or at your option) any      #
+# (later version.                                              #
+#                                                              #
+# This program is distributed in the hope that it will be      #
+# useful, but WITHOUT ANY WARRANTY; without even the implied   #
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      #
+# PURPOSE. See the GNU General Public License for more         #
+# details.                                                     #
+#                                                              #
+# You should have received a copy of the GNU General Public    #
+# License along with this program; if not, write to the Free   #
+# Software Foundation, Inc., 59 Temple Place, Suite 330,       #
+# Boston, MA 02111-1307 USA                                    #
+#                                                              #
+################################################################
+################################################################
+################################################################
+
+RED=';31m'
+GREEN=';32m'
+YELLOW=';33m'
+GREY=';34m'
+PURPLE=';35m'
+CYAN=';36m'
+NC='\e[0m' # No Color
+
+NORMAL='\e[0'
+BOLD='\e[1'
+FAINT='\e[2'
+ITALIC='\e[3'
+LINK='\e[4'
+
+#print colorful messages
+function print_out(){
+case $1 in
+  'error')   color="${NORMAL}${RED}";    pretext="ERROR:   " ;;
+  'info')    color="${NORMAL}${GREY}";   pretext="INFO:    " ;;
+  'debug')   color="${NORMAL}${YELLOW}"; pretext="DEBUG:   " ;;
+  'success') color="${NORMAL}${GREEN}";  pretext="SUCCESS: " ;;
+  'link')    color="${LINK}${CYAN}";     pretext="URL:     " ;;
+esac
+ printf "${color}${pretext} $2 ${NC}\n"
+ return 1
+}
+
+trapeze () {
+curl -sL "$softurl/sapp-wp-signon.php" > /dev/null
+echo
+printf "${NORMAL}${RED}Houston!${NORMAL}${CYAN} Termination sequence launched. ${NORMAL}${GREEN}Cockpit ejection successful.${NC}\n"
+exit
+}
+
+trap trapeze SIGINT
+
+function box_out()
+{
+  local s=("$@") b w
+  for l in "${s[@]}"; do
+    ((w<${#l})) && { b="$l"; w="${#l}"; }
+  done
+  tput setaf 3
+  echo " -${b//?/-}-
+| ${b//?/ } |"
+  for l in "${s[@]}"; do
+    printf '| %s%*s%s |\n' "$(tput setaf 4)" "-$w" "$l" "$(tput setaf 3)"
+  done
+  echo "| ${b//?/ } |
+ -${b//?/-}-"
+  tput sgr 0
+}
+
+################################################################
+# Help                                                         #
+help()
+{
+if [ -z "$1" ]; then
+#print_out 'Ignition...'; sleep .2
+cat <<_EOF_
+------------------------------------Cockpit's Main Menu------------------------ [q] Quit --------
+
+ [w] Wordpress                                 [f] Firewall
+     (1) WP-Admin SSO                              (1) Unblock ModSec
+     (2) cPanel SSO                                (2) Unblock SSH/sFTP
+     (3) Enable WP Cron                            (3) Allow cPanel
+     (4) Enable SMTP                               (4) Enable Remote MySQL
+     (5) Reset Permissions                         (5) Open Outbound Port
+     (6) List Modified Files - 24h
+     (7) Install Redis                         [m] Migration
+     (8) Install Redis PRO                         (1) SSH - Rsync    (5) Cloudways  
+     (9) Delete Redis                              (2) All-In-One     (6) WP Engine
+                                                   (3) Kinsta         (7) Site Ground
+ [d] Database                                      (4) FlyWheel       (8) Seravo
+     (1) Site's Autoload Size                  
+     (2) Site's Database Size                  [a] Administration
+     (3) Fix DB credentails                        (1) FTP Connections
+     (4) MyIsam to InnoDB                          (2) Memory usage
+     (5) Change collation (utf8mb4_unicode_ci)     (3) SWAP Usage
+                                                   (4) Server XRay
+ [u] URL                                           (5) MySQL Status
+     (1) Get SiteID & User                         (7) MySQL Data Length
+     (2) DNS Lookup                                (8) MySQL Disk by Database
+     (3) Header, Redirect, Cache & TTFB checker    (9) MySQL Disk by Tables
+
+-------------------------------------------------------------------------------------------------
+_EOF_
+else
+cat <<_EOF_
+---------------------------------------------------------------------------------------------------------------
+
+              Try running cockpit without any argument to check for an extended list of options.
+                                                       OR 
+              If you are trying to access legacy Rlaunch, So here is the list of Rlaunch arguments.
+       |
+       |          -----------------------------------------------------------------------------------------
+      / \         |   Rocket Launch                                                                       |
+     /___\        -----------------------------------------------------------------------------------------
+    |     |       | rlaunch <command> <argument>                                                          |
+    |=   =|       |                                                                                       |
+    |     |       | Available Commands:                                                                   |
+    |  R  |       |                                                                                       |
+    |  L  |       | openport         # Allow Outbound TCP Traffic to port above 1000                      |
+    |  A  |       | resetperms       # Reset permissions in /home/username/public_html/                   |
+    |  U  |       | fixwpcreds       # Reset WordPress database credentials in wp-config from Softaculous |
+    |  N  |       | whitelist_modsec # Whitelist an IP from mod_security                                  |
+    |  C  |       | enable_redis     # Enable Redis object caching for a username                         |
+    |  H  |       | myisam2innodb    # Convert all MyISAM tables to InnoDB for increased performance      |
+    |     |       | wpcron           # Disable the built in WordPress cron in favor of a Linux Cron job   |
+   /|  !  |\      | cpanellink       # Create a link to login to cPanel as a user (FOR STAFF ONLY)        |
+  / |  !  | \     | sso              # Create SSO to login wp-admin                                       |
+ /  |__!__|  \    | smtp             # Configure SMTP on the server                                       |
+|  / /_|_\ \  |   |                                                                                       |
+| /         \ |   -----------------------------------------------------------------------------------------
+|/           \|
+---------------------------------------------------------------------------------------------------------------
+_EOF_
+fi
+}
+
+################################################################
+# Check for root.                                              #
+################################################################
+checkRoot()
+{
+if [[ `id -u` == 0 &&  $1 == 'root' ]]
+then
+  return 0
+else
+  return 1
+fi
+#if [ `whmoami` == 'rocketstaff' && $1 == 'rocketstaff']
+#then
+#  return
+#else
+#  echo "ERROR: You must be rocketstaff user to run this program"
+#  exit
+#fi
+}
+
+
+################################################################
+# Sanity checks                                                #
+################################################################
+# Are we rnning as root?
+# CheckRoot
+# Initialize variables
+#checkRoot
+
+function valid_ip(){
+
+  if [ -z "$1" ];  then
+    read -rep $'IP: ' ipaddr;
+  else
+    ipaddr=$1
+  fi
+
+
+if [[ "$ipaddr" == "" ]]
+then echo "Error: Please specify a IP."
+return 1
+else
+  local  stat=1
+  if [[ $ipaddr =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    OIFS=$IFS
+    IFS='.'
+    ip=($ipaddr)
+    IFS=$OIFS
+    [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+      && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+    stat=$?
+  fi
+
+ if [[ $stat -ne 0 ]]; then
+  echo "Invalid IP Address ($ipaddr). Please check the IP and try again."
+  return $stat
+ fi
+fi
+
+}
+
+valid_user(){
+
+if [ -z "$1" ];  then
+  read -rep $'User: ' user
+else
+  user=$1
+fi
+  usercheck=$(/usr/sbin/whmapi1 accountsummary user=$user | grep result: | awk '{ print $2 }')
+  if [[ $usercheck == 1 ]]
+  then true;  
+  homedir=/home/$user
+  webroot=$homedir/public_html
+  redisdir=$homedir/redis
+  else echo $user is not a valid username. Please check and try again.; sleep .8
+  exit 1
+  fi
+}
+
+Backup()
+{
+user=$(whoami)
+input=/home/$user
+output=/tmp/${user}_home_$(date +%Y-%m-%d_%H%M%S).tar.gz
+
+echo Total files: `find . -type f | wc -l`
+echo Total directories: `find . -type d | wc -l`
+
+tar -czf $output $input 2> /dev/null
+echo Files archived: `tar -tzf $output | grep -v /$ | wc -l`
+echo Directories archived: `tar -tzf $output | grep  /$ | wc -l`
+echo
+echo "Backup of $input completed! Details about the output backup file:"
+ls -l $output
+}
+
+Memory(){
+echo 'Server Memory Usage------------------------------------------------------------------------'
+free -mhtl
+echo 'Memory Usage by process - Top 10-----------------------------------------------------------'
+ps -eo size,pid,user,command --sort -size | awk '{ hr=$1/1024 ; printf("%13.2f Mb ",hr) } { for ( x=4 ; x<=NF ; x++ ) { printf("%s ",$x) } print "" }' | head
+echo 'Swap Usage by process - Top 10-------------------------------------------------------------'
+for file in /proc/*/status ; do awk '/VmSwap|Name/{printf $2 " " $3}END{ print ""}' $file 2>/dev/null; done| awk '{ print $2" "$3" "$1 }'  | sort -n | tail
+}
+
+LVEPS(){
+echo 'User consumption by CPU--------------------------------------------------------------------'
+lveps -ds cpu
+echo 'User consumption by Memory-----------------------------------------------------------------'
+lveps -ds mem
+}
+
+LVE(){
+echo "AVG CPU - $1"
+lveinfo --period $1 -d --show-columns ID,aCPU,mCPU,aPMem,mPMem,aEP,mEP,lPMem,aNproc,mNproc,aIO,mIO,aIOPS,mIOPS -o aCPU
+echo "MAX CPU - $1"
+lveinfo --period $1 -d --show-columns ID,mCPU,aCPU,aPMem,mPMem,aEP,mEP,lPMem,aNproc,mNproc,aIO,mIO,aIOPS,mIOPS -o mCPU
+echo "AVG Physical Memory - $1"
+lveinfo --period $1 -d --show-columns ID,aPMem,mPMem,aCPU,mCPU,aEP,mEP,lPMem,aNproc,mNproc,aIO,mIO,aIOPS,mIOPS -o aPMem
+echo "MAX Physical Memory - $1"
+lveinfo --period $1 -d --show-columns ID,mPMem,aPMem,aCPU,mCPU,aEP,mEP,lPMem,aNproc,mNproc,aIO,mIO,aIOPS,mIOPS -o mPMem
+}
+
+
+MySQL(){
+echo 'Mysql Information Schema ------------------------------------------------------------------'
+mysql -e 'SELECT TABLE_SCHEMA,TABLE_NAME,ENGINE,TABLE_ROWS,AVG_ROW_LENGTH,DATA_LENGTH,INDEX_LENGTH FROM INFORMATION_SCHEMA.TABLES order by table_rows ASC;'
+mysql -e 'SELECT table_schema, ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS `Size(MB)` FROM information_schema.TABLES GROUP BY table_schema ORDER BY `Size(MB)` ASC;'
+mysql -e 'SELECT table_schema as `Database`, table_name AS `Table`, round(((data_length + index_length) / 1024 / 1024), 2) `Size in MB` FROM information_schema.TABLES ORDER BY (data_length + index_length) ASC;'
+}
+
+MySQL_rowcount(){
+echo 'Mysql Database, Tables by Total Row, AVG Row length, Index length -------------------------'
+mysql -e 'SELECT TABLE_SCHEMA,TABLE_NAME,ENGINE,TABLE_ROWS,AVG_ROW_LENGTH,DATA_LENGTH,INDEX_LENGTH FROM INFORMATION_SCHEMA.TABLES order by table_rows DESC limit 10;'
+}
+
+MySQL_dbsize(){
+echo 'MySQL Database Disk Consumption -----------------------------------------------------------'
+mysql -e 'SELECT table_schema as `Database`, ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS `Size(MB)` FROM information_schema.TABLES GROUP BY table_schema ORDER BY `Size(MB)` DESC Limit 10;'
+}
+
+MySQL_tablesize(){
+echo 'MySQL Tables Disk Consumption -------------------------------------------------------------'
+mysql -e 'SELECT table_schema as `Database`, table_name AS `Table`, ROUND(((data_length + index_length) / 1024 / 1024), 2) AS `Size(MB)` FROM information_schema.TABLES ORDER BY `Size(MB)` DESC Limit 10;'
+}
+
+Nginx(){
+echo 'Nginx Access count by IP & URL ------------------------------------------------------------'
+awk '{print $1,$7}' /var/log/nginx/access.log | cut -d? -f1 | sort | uniq -c |sort -n | tail
+echo 'Nginx Access count by IP, URL & URI -------------------------------------------------------'
+awk '{print $1,$7,$9}' /var/log/nginx/access.log | cut -d? -f1 | sort | uniq -c |sort -n | tail
+}
+
+Journal(){
+echo 'Services Logs ----------------------------------------------------------'
+journalctl -u nginx.service --since today
+journalctl -u mysqld.service --since today
+journalctl -u httpd.service --since today
+echo 'Journal - Last 20 ------------------------------------------------------'
+journalctl -p err -b -n 20
+}
+
+Process(){
+echo 'Processes Count --------------------------------------------------------'
+ps aux | awk '{print $1, $11}' | sort | uniq -c | sort -n | tail
+echo 'Redis Sockets ----------------------------------------------------------'
+ps aux | grep 'redis.sock' | grep -v 'grep' | awk '{print $1}' | uniq -c | sort -n
+echo 'Apache Processes -------------------------------------------------------'
+ps auxwwwf  | grep httpd | wc -l
+echo 'Nginx Processes --------------------------------------------------------'
+ps auxwwwf  | grep nginx | wc -l
+echo 'MySql Process ----------------------------------------------------------'
+ps auxwwwf  | grep mysql | wc -l
+}
+
+ServerXray()
+{
+Memory
+LVEPS
+#LVE '30d'
+#LVE
+MySQL_rowcount
+MySQL_dbsize
+MySQL_tablesize
+Nginx
+Journal
+Process
+}
+
+ftpconn(){
+  netstat -n | grep :21 && ps aux | grep ftp | awk {'print $1'} | sort | uniq -c
+}
+
+memoryusage(){
+  ps -eo size,pid,user,command --sort -size | awk '{ hr=$1/1024 ; printf("%13.2f Mb ",hr) } { for ( x=4 ; x<=NF ; x++ ) { printf("%s ",$x) } print "" }' | head 
+}
+
+swapusage(){
+  for file in /proc/*/status ; do awk '/VmSwap|Name/{printf $2 " " $3}END{ print ""}' $file 2>/dev/null; done| awk '{ print $2" "$3" "$1 }'  | sort -n | tail -20
+}
+
+domainlookup(){
+  res=$(curl -s -XPOST -H "content-type: application/json" https://api.rocket.net/internal/v1/sites/lookup -d "{\"domain\": \"$1\"}")
+  if [[ $res == *"site_id"* ]]; then
+    echo 'Success: Domain exists on Rocket.net';
+    echo 'Site ID:'; echo "$res" | jq -r '.site_id'
+    echo 'Username:'; echo "$res" | jq -r '.username'
+    exit 0
+  elif [[ $res == *"Unable to find installation with given domain"* ]]; then
+    echo 'Error: Unable to find installation with given domain.'
+  else
+    echo 'Error: Failed to lookup the domain.'
+  fi
+}
+
+dnslookup(){  
+  host -a $1
+}
+
+domain_header(){  
+curl -ILsvo /dev/null -H 'Cache-Control: no-cache' -w "
+No Connects, %{num_connects}
+No Redirects, %{num_redirects}
+Size Download, %{size_download}
+Size Header, %{size_header}
+Size Request, %{size_request}
+Time Appconnect, %{time_appconnect}
+Time Namelookup, %{time_namelookup}
+Time Pretransfer, %{time_pretransfer}
+Time Redirect, %{time_redirect}
+Time Connect, %{time_connect}
+TTFB, %{time_starttransfer}
+Total time, %{time_total}\n" $1 | column -s, -t
+}
+
+#####################FIREWAALL START
+###ModSec
+IPWhitelisting (){
+modconf="/etc/apache2/conf.d/modsec/modsec2.user.conf"
+errorlog="/usr/local/apache/logs/error_log"
+
+fullip=$1    #assign variable $fullip from first argument
+ip=$1    #assign variable $ip for use in the valid_ip routine.
+ip3=$(echo $ip| cut -d. -f1,2,3);    #first three octets of the IP
+epoch=$(date +%s)     #Unix time stamp for uniq id: in the modsec rule
+
+# IP is good, continue and make cool messages along the way
+if $(grep -A2 $ip3 $errorlog | grep "Pattern match" > /dev/null 2>&1)
+then
+echo "Info: IP Found To Be Triggering Mod Security"
+else
+echo "Info: $fullip Not Found To Be Triggering Mod Security"
+fi
+
+# Check to see if the /24 is already whitelisted
+# Check to see if the first 3 octets are already whitelisted
+if $(grep $ip3.0  $modconf > /dev/null 2>&1)
+then
+  echo "Info: $fullip is already exempted from Mod Security"
+  exit 0
+else
+  # Whitelist the IP#exclude the entire /24, assign the Unix time as the id
+  echo SecRule REMOTE_ADDR \"@ipMatch $ip3.0/24\" \"phase:1,id:$epoch,nolog,allow\" >> $modconf
+  #true && echo Launch Successful! #uncomment for testing
+  /scripts/restartsrv_apache --restart
+  echo "Success: $fullip Whitelisted in Mod Security"
+  exit 0
+fi
+}
+
+###Unblock SSH/sFTP
+function csf_deny_remove(){
+ if [[ $(csf -dr $1| grep 'Removing rule') ]]
+ then
+ echo "Success: IP Address ($1) is now whitelisted"
+ else
+ echo "Info: IP Address ($1) is not blocked"
+ fi
+}
+
+###Allow cPanel Port
+function csf_cpanel_whitelist(){
+  out=$(csf -a "tcp|in|d=2083|s=$1")
+  if [[ $out =~ 'Adding tcp' ]]; then
+  echo "Success: IP Address ($1) is now whitelisted on port 2083"; sleep .2
+  elif [[ $out =~ 'already in the allow' ]]; then
+  echo "Info: IP Address ($1) is already whitelisted on port 2083"; sleep .2
+  else
+  echo "Error: $out"
+  fi
+  out=$(csf -a "tcp|in|d=2087|s=$1")
+  if [[ $out =~ 'Adding tcp' ]]; then
+  echo "Success: IP Address ($1) is now whitelisted on port 2087"
+  exit 0
+  elif [[ $out =~ 'already in the allow' ]]; then
+  echo "Info: IP Address ($1) is already whitelisted on port 2087"
+  exit 0
+  else
+  echo "Error: $out"
+  fi
+}
+
+###Allow remote MySQL
+function remote_mysql(){
+  valid_user $user
+  out=$(csf -a "tcp|in|d=3306|s=$1")
+  if [[ $out =~ 'Adding tcp' ]]; then
+  echo "Success: MySQL is now accepting connections from ($1)"; sleep .2
+  elif [[ $out =~ 'already in the allow' ]]; then
+  echo "Info: MySQL is already accepting connections from ($1)"; sleep .2
+  else
+  echo "Error: $out"
+  fi
+  if [[ $(uapi  --user=$user Mysql add_host host=$1 | grep 'status: 1') ]]; then
+  echo "Success: Remote MySQL is now enabled for ($user)"; sleep .8
+  exit 0
+  else
+  echo "Error: Remote MySQL is not enabled for ($user)"
+  fi
+}
+
+###Allow outgoing port
+function openport(){
+csfconf="/etc/csf/csf.conf"
+
+if [ -z "$1" ];  then
+  read -p 'Specify Port:' newport
+else
+  newport=$1
+fi
+
+if [[ "$newport" == "" ]]
+then echo "Error: Please specify a port number."
+return 1
+else
+  if [[ $(echo $newport| grep -E '^([0-9]{4,5}$)') ]]
+  then
+    if [[ -z $(grep ,$newport $csfconf) ]]
+    then
+      tcpout=$(grep ^TCP_OUT $csfconf | cut -d\" -f2 );
+      #echo $tcpout
+      sed  "s@^TCP_OUT.*@TCP_OUT = \"$tcpout,$newport\"@" $csfconf -i
+      /usr/sbin/csf -r >/dev/null && echo "Success: Port $newport is now open."; sleep .8
+    else
+      echo "Info: $newport is already open."; sleep .8
+    fi
+  else
+    echo "Error: $newport is not a valid port number.";
+    return 1
+  fi
+fi
+return 0
+}
+#####################FIREWAALL STOP
+
+#####################DATABASE START
+###Fix WP credentials from Softaculous
+
+function site_autoload_size(){
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html
+prefix=\$(wp db prefix)
+echo "Table Prefix:\$prefix"
+$phpbin $wpbin db query "SELECT 'autoloaded data in KiB' as name, ROUND(SUM(LENGTH(option_value))/ 1024) as value FROM \$prefix""options WHERE autoload='yes' \
+UNION SELECT 'autoloaded data count', count(*) FROM \$prefix""options WHERE autoload='yes' \
+UNION (SELECT option_name, length(option_value) FROM \$prefix""options WHERE autoload='yes' ORDER BY length(option_value) DESC LIMIT 10);" | tr '\t' ',' | column -s, -t
+EOF
+}
+
+function site_db_size(){
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html
+$phpbin $wpbin db size --human-readable --all-tables --orderby=size --order=asc --skip-plugins --skip-themes
+$phpbin $wpbin db size --human-readable --skip-plugins --skip-themes
+EOF
+}
+
+function fix_db_credentials(){
+su $user -s /usr/bin/bash -- << \EOF
+if [[ -f "/home/$USER/.softaculous/installations.php" ]]; then
+cd /home/$USER/public_html
+if [ -f "wp-config.php" ]
+then
+#dbuser=$(/usr/local/bin/php -r  "\$data=reset(unserialize(file_get_contents('/home/$USER/.softaculous/installations.php')));echo \$data[softdbuser];")
+dbuser=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | head -3 | head -1)
+dbpass=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | head -3 | tail -1)
+echo 'Fixing Database credentials for Production:';
+/usr/local/bin/php /usr/local/bin/wp option get home --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_USER "$dbuser" --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_NAME "$dbuser" --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_PASSWORD "$dbpass" --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_HOST 'localhost' --skip-plugins --skip-themes
+
+if [ $(/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php --list_ins --count=1) == 2 ];then
+dbuser=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | tail -3 | head -1)
+dbpass=$(cat /home/$USER/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 |grep softdb -A1|sed '/localhost\|softdb/d' | tail -3 | tail -1)
+echo 'Fixing Database credentials for Staging:';
+/usr/local/bin/php /usr/local/bin/wp option get home --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_USER "$dbuser" --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_NAME "$dbuser" --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_PASSWORD "$dbpass" --skip-plugins --skip-themes
+/usr/local/bin/php /usr/local/bin/wp config set DB_HOST 'localhost' --skip-plugins --skip-themes
+fi
+
+else
+echo 'Error: Wordpress Installation not found'
+fi
+else
+echo 'Error: Softaculous Installation not found'
+fi
+EOF
+}
+
+function fix_db_collation(){
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html
+echo "Info: Backing up Database"
+$phpbin $wpbin db export pre_collation_backup.sql
+echo "Info: Moving Backup to /home/$user/tmp"
+mv pre_collation_backup.sql /home/$user/tmp
+echo "Info: Running MySQL Check"
+$phpbin $wpbin db check |sed 's/\|/ /'|awk '{print \$1}' > /home/$user/tmp/dbtables.txt
+sed -i '$ d' /home/$user/tmp/dbtables.txt
+echo "Info: Converting Charset and Collation"
+while read line; do $phpbin $wpbin db query "alter table \$line CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"; done < /home/$user/tmp/dbtables.txt
+$phpbin $wpbin config set DB_CHARSET 'utf8'
+$phpbin $wpbin config set DB_COLLATE ''
+echo "Info: Flushing Cache and CDN"
+$phpbin $wpbin cache flush
+$phpbin $wpbin rewrite flush
+$phpbin $wpbin cdn purge
+rm /home/$user/tmp/dbtables.txt
+EOF
+echo "Success: Conversion Completed Successfully"
+}
+
+###Mysql Engine conversion
+function myisam_2_innodb(){
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html
+OLDIFS="$IFS"
+IFS=$'\n' # bash specific
+WPTABLES=\$($phpbin $wpbin db query "SHOW TABLE STATUS WHERE Engine = 'MyISAM'" --skip-plugins --skip-themes --silent --skip-column-names | awk '{ print \$1}')
+for WPTABLE in \${WPTABLES[@]}; do
+echo "Info: Converting \${WPTABLE} to InnoDB"
+$phpbin $wpbin db query "ALTER TABLE \${WPTABLE} ENGINE=InnoDB" --skip-plugins --skip-themes
+done
+IFS="$OLDIFS"
+echo "Success: Conversion from MyISAM to InnoDB completed."
+EOF
+}
+#####################DATABASE STOP
+
+#####################MIGRATION START
+###All-in-one Migration
+function migrate_ai1wm(){
+cat <<_EOF_
+All-In-One-Migration
+++++++++++++++++++++
+How do you like to migrate the site?
+  (1) Download from remote host.
+  (2) File located under different path.
+  (3) All-In-One Backups that already exists under the site.
+_EOF_
+
+read -rep $'\nChoose an Option [1-3]: ' choice3
+case $choice3 in
+  1|2|3)
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html
+echo 'Info: Deleting default plugins: akismet coming-soon google-analytics-for-wordpress hello optinmonster wpforms-lite wp-mail-smtp'
+$phpbin $wpbin plugin deactivate akismet coming-soon google-analytics-for-wordpress hello optinmonster wpforms-lite wp-mail-smtp --skip-plugins --skip-themes > /dev/null 2>&1
+$phpbin $wpbin plugin delete akismet coming-soon google-analytics-for-wordpress hello optinmonster wpforms-lite wp-mail-smtp --skip-plugins --skip-themes > /dev/null 2>&1
+echo 'Info: Installing all-in-one-wp-migration all-in-one-wp-migration-unlimited-extension'
+$phpbin $wpbin plugin install all-in-one-wp-migration https://rocketscripts.space/assets/aiounlimited.zip  --activate --skip-plugins --skip-themes > /dev/null 2>&1
+$phpbin $wpbin plugin update all-in-one-wp-migration-unlimited-extension --skip-plugins --skip-themes > /dev/null 2>&1
+EOF
+  ;;&
+  1|2)
+  read -p 'Provide the URL/path of All-in-One-backup(.wpress) file:' filepath
+    if [ -z "$filepath" ]; then
+      echo 'Error: No URL/path provided.' ; exit 1
+    fi
+  ;;&
+  1)
+    status_code=$(curl --write-out %{http_code} --silent --output /dev/null $filepath)
+    if [[ $status_code -eq 200 ]]; then
+      su - $user -s /usr/bin/bash -c "wget -c --header='Accept: text/html' --user-agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:21.0) Gecko/20100101 Firefox/21.0' -P /home/$user/public_html/wp-content/ai1wm-backups/ $filepath"
+    else
+      echo "Error: $status_code Unable to download backup."; exit 1
+    fi
+  ;;
+  2) 
+  if [[ -f "$filepath" ]]; then
+    mv $filepath /home/$user/public_html/wp-content/ai1wm-backups/
+    echo $(basename "$filepath")
+  else
+    echo "Error: Backup file doens't exists."; exit 1
+  fi
+  ;;
+  3) ;;
+  *)  echo -e "\tinvalid option, please try again"; exit 1;;
+esac
+
+su - $user -s /usr/bin/bash -- <<EOF
+cd /home/$user/public_html
+response=\$($phpbin $wpbin ai1wm list-backups 2>&1)
+if [[ \$response == *"Allowed memory size"* ]]; then
+echo 'Error: PHP memory limit reached, please increase it then re-run the migration.'
+exit 1
+elif [[ \$response == *"Fatal error"* ]]; then
+echo "Error: \$response"
+exit 1
+elif [[ \$response == *"Error:"* ]]; then
+echo "Error: \$response"
+exit 1
+fi
+echo "Info: Verifying All-in-One-backup(.wpress) under /home/$user/public_html/wp-content/ai1wm-backups/"
+$phpbin $wpbin ai1wm list-backups --quiet
+EOF
+retVal=$?
+if [ $retVal -ne 0 ]; then
+    echo 'Error: Migration failed'; exit $retVal
+else
+  if [[ $(ls -1 /home/$user/public_html/wp-content/ai1wm-backups/*.wpress 2>/dev/null | wc -l) -gt 0 ]]; then
+    if [[ $choice3 -eq 3 ]]; then
+      read -p 'Which backup do you like to restore?' wpressname
+    else
+      wpressname=$(basename "$filepath")
+    fi
+    migration_status=$(su - $user -s /usr/bin/bash -c "cd /home/$user/public_html && $phpbin $wpbin ai1wm restore $wpressname --yes")
+  else
+    echo 'No Backup found.'
+  fi
+fi
+
+if [[ $migration_status == *"Restore complete"* ]]; then
+  read -p "Do you like to delete the backup? [yn]" answer
+  if [[ $answer = y ]] ; then
+  rm -f /home/$user/public_html/wp-content/ai1wm-backups/$wpressname
+  fi
+
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html
+echo 'Info: Deleting all-in-one-wp-migration all-in-one-wp-migration-unlimited-extension'
+$phpbin $wpbin plugin deactivate all-in-one-wp-migration all-in-one-wp-migration-unlimited-extension --quiet --skip-plugins --skip-themes > /dev/null 2>&1
+$phpbin $wpbin plugin delete all-in-one-wp-migration all-in-one-wp-migration-unlimited-extension --quiet --skip-plugins --skip-themes > /dev/null 2>&1
+echo 'Info: Clearing cache'
+$phpbin $wpbin cache flush
+$phpbin $wpbin rewrite flush
+$phpbin $wpbin cdn purge
+$phpbin $wpbin option get home --quiet --skip-plugins --skip-themes
+EOF
+  echo 'Success: Migration completed Successfully.'
+else
+  echo 'Error: Migration failed.'
+fi
+}
+
+
+###All-in-one Migration
+function migrate_seravo(){
+cat <<_EOF_
+Seravo Migration
+++++++++++++++++++++
+_EOF_
+read -rep 'Please provide Source Host: ' mgHost
+read -rep 'Please provide SSH User: ' mgUser
+read -rep 'Please provide SSH Port [22]: ' mgPort
+read -rep 'Please provide Domain: ' mgDomain
+mgPort=${mgPort:-22}
+if [ $mgPort > 22 ]; then #whitelist port if < 22
+ openport $mgPort
+fi
+echo "Runnign Command: ssh $mgUser@$mgHost -p $mgPort"
+ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+cd ~/htdocs/wp-content
+pwd
+echo '==========================================================================================='
+echo 'Table Prefix' && wp config get table_prefix
+echo '==========================================================================================='
+sleep .8
+wp db export rocketdb.sql 2> /dev/null
+EOF
+if [ ! $? -eq 0 ]; then
+ exit 1
+fi
+url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
+
+su - $user -s /usr/bin/bash -- << EOF
+echo "Info: Migrating to site $url"
+echo "Info: Accessing remote Host for Rsync"
+rsync -avz -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:~/htdocs/wp-content/ /home/$user/public_html/wp-content
+echo "Info: Taking Database Backup"
+$phpbin $wpbin db import $webroot/wp-content/rocketdb.sql --path=$webroot $wpcliopt
+echo "Info: Running Search & Replace"
+$phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
+echo "Info: Clearing Cache"
+$phpbin $wpbin cache flush --path=$webroot $wpcliopt && $phpbin $wpbin rewrite flush --path=$webroot $wpcliopt && rm -rf wp-content/cache
+echo "Info: Removing wp-content/rocketdb.sql"
+rm /home/$user/public_html/wp-content/rocketdb.sql
+EOF
+if [ ! $? -eq 0 ]; then
+ exit 1
+fi
+ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+cd ~/htdocs/wp-content
+rm rocketdb.sql
+EOF
+echo "Success: Migration Completed"
+
+}
+
+
+function migrate_ssh(){
+cat <<_EOF_
+$1 Migration
+++++++++++++++++++++
+_EOF_
+read -rep 'Please provide Source Host: ' mgHost
+read -rep 'Please provide SSH User: ' mgUser
+read -rep 'Please provide SSH Port [22]: ' mgPort
+read -rep 'Please provide Domain: ' mgDomain
+read -rep 'Please provide Webroot: ' mgRoot
+mgPort=${mgPort:-22}
+if [ $mgPort > 22 ]; then #whitelist port if < 22
+ openport $mgPort
+fi
+echo "Runnign Command: ssh $mgUser@$mgHost -p $mgPort"
+ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+cd $mgRoot
+pwd
+echo '==========================================================================================='
+echo 'Table Prefix' && wp config get table_prefix
+echo '==========================================================================================='
+sleep .8
+wp db export rocketdb.sql 2> /dev/null
+EOF
+if [ ! $? -eq 0 ]; then
+ exit 1
+fi
+url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
+
+su - $user -s /usr/bin/bash -- << EOF
+echo "Info: Migrating to site $url"
+echo "Info: Accessing remote Host for Rsync"
+rsync -avz --ignore-existing --exclude wp-config.php -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+echo "Info: Taking Database Backup"
+$phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
+echo "Info: Running Search & Replace"
+$phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
+echo "Info: Clearing Cache"
+$phpbin $wpbin cache flush --path=$webroot $wpcliopt && $phpbin $wpbin rewrite flush --path=$webroot $wpcliopt && rm -rf wp-content/cache
+echo "Info: Removing rocketdb.sql"
+rm /home/$user/public_html/rocketdb.sql
+EOF
+if [ ! $? -eq 0 ]; then
+ exit 1
+fi
+ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+cd $mgRoot
+rm rocketdb.sql
+EOF
+echo "Success: Migration Completed"
+}
+#####################MIGRATION STOP
+
+#####################WORDPRESS START
+function wordpress_sso(){
+softurl=$(cat /home/$user/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 | grep softurl -A1 |sed '/softurl/d' | tail -3 | tail -1)
+if [ $(/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php --list_ins --user=$user --count=1) == 2 ];then
+  read -rep "Do you like to create SSO for Staging Site [Y/n]? " -n1 answer
+  if [[ $answer = y ]] ; then
+    webroot=$(cat /home/$user/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 | grep softpath -A1 |sed '/softpath/d' | tail -3 | head -1)
+    softurl=$(cat /home/$user/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 | grep softurl -A1 |sed '/softurl/d' | tail -3 | head -1)
+    echo "Info: Staging Site found: $webroot"
+  fi
+fi
+su - $user -s /usr/bin/bash -- << EOF
+secret=\$(cat /proc/sys/kernel/random/uuid)
+curl -s 'https://raw.githubusercontent.com/naqirizvi/rocket/main/sapp' -o $webroot/sapp-wp-signon.php
+printf "${NORMAL}${CYAN}Injecting secret to PHP script${NC}\n"; sleep .5
+sed -i "s/SECRET/\$secret/g" $webroot/sapp-wp-signon.php
+printf "${NORMAL}${GREEN}Docked SSO script to site successfully${NC}\n"; sleep .2
+echo 'Copy/Paste the link in browser. Once you login, the SSO will detech automatically.'; sleep .2
+echo "$softurl/sapp-wp-signon.php?pass=\$secret"
+EOF
+echo
+sleep 3
+until [ ! -e $webroot/sapp-wp-signon.php ]; do echo -e '\e[1A\e[KSSO file exist.'; sleep 2; echo -e '\e[1A\e[Krechecking the file...'; sleep 1; done
+if [ $? -gt 0 ]; then
+echo
+print_out 'error' 'SSO abnormally terminated, please pay a visit to the crash site.'
+#printf "${NORMAL}${RED}SSO abnormally terminated, please pay a visit to the crash site ;-( ${NC}\n"
+curl -sL "$softurl/sapp-wp-signon.php" > /dev/null
+else
+echo
+ouprint_outt 'success' 'Admin login successful, SSO detechted automatically.'
+
+#printf "${NORMAL}${GREEN}Admin login successful, SSO detechted automatically.${NC}\n"
+fi
+}
+
+cpanel_sso(){
+  whmapi1 create_user_session service=cpaneld locale=en user=$user | grep url | awk '{print $2}'
+}
+
+###Linux permission reset
+function reset_permissions(){
+  echo "Resetting Permissions for $user"
+  find /home/$user/public_html/ -type f -exec chmod 644 {} \;
+  find /home/$user/public_html/ -type d -exec chmod 755 {} \;
+  echo "Permission Reset Complete."
+}
+
+###Setup Cron
+function setup_cron() {
+crontemp=/home/$user/.crontemp
+case $1 in
+    wp) cron="*/5 * * * * /usr/local/bin/php -f /home/$user/public_html/wp-cron.php"  ;;
+    redis) cron="*/5 * * * * bash /home/$user/redis/start_redis.sh >/dev/null 2>&1"   ;;
+esac
+
+cronres=$(crontab -l -u $user 2>&1)
+if [[ "$cronres" == *"no crontab"* ]]; then
+  echo "$cron" > $crontemp
+  crontab -u $user $crontemp
+  echo 'Info: No Cronjob found, configuring new one.'; sleep .2
+else
+  if ! echo "$cronres" | fgrep -q "$cron"; then
+    crontab -l -u $user > $crontemp
+    echo "$cron" >> $crontemp
+    crontab -u $user $crontemp
+    rm -f $crontemp
+    echo 'Info: Preserving old Cron and adding new one.'; sleep .2
+  else
+    echo 'Info: Cronjob already configured'; sleep .8; exit 0
+  fi
+fi
+if [[ $1 == 'wp' ]]; then
+  su - $user -s /usr/bin/bash -c "$phpbin $wpbin config set DISABLE_WP_CRON true --path=$webroot $wpcliopt"
+  if [ $? -ne 0 ]; then
+    echo 'Error: Unable to set DISABLE_WP_CRON in wp-config.php'; sleep .8; exit 1
+  fi
+fi
+echo 'Success: Cron configured successfully'; sleep .8; exit 0
+crontab -l -u $user
+}
+
+function delete_cron() {
+crontemp=/home/$user/.crontemp
+case $1 in
+    wp) cron="*/5 * * * * /usr/local/bin/php -f /home/$user/public_html/wp-cron.php"  ;;
+    #redis) cron="*/5 * * * * bash /home/$user/redis/start_redis.sh >/dev/null 2>&1"   ;;
+    redis) cron="start_redis.sh"   ;;
+esac
+
+cronres=$(crontab -l -u $user 2>&1)
+if [[ "$cronres" == *"no crontab"* ]]; then
+  echo 'Info: No Cronjob found, nothing to delete.'; sleep .2
+else
+count1=$(crontab -l -u $user | wc -l)
+crontab -l -u $user | grep -v "$cron"  | crontab -u $user -
+count2=$(crontab -l -u $user | wc -l)
+  if [[ $count2 < $count1 ]]; then
+    echo 'Success: Cron removed successfully.'; sleep .2
+  elif [[ $count2 == $count1 ]]; then
+    echo 'Info: Cronjob not found, nothing to delete.'; sleep .2
+  else
+    echo 'Error: Unable to delete Cron. These are the cronjobs'; sleep .2
+    crontab -l -u $user; sleep .2
+  fi
+fi
+}
+
+###enable_redis
+redis_ping(){
+redis_ping_res=$(su - $user -s /usr/bin/bash -c "/usr/bin/redis-cli -s $redisdir/redis.sock ping 2>/dev/null")
+if [[  $redis_ping_res == 'PONG' ]]; then
+  echo "Info: Redis daemon is running."
+  return 0;
+else
+  echo "Info: Redis daemon is not running."
+  return 1
+fi
+}
+
+redis_plugin(){
+redis_status
+if [[ $? -eq 1 ]]; then #redis not connected
+echo "Info: Installing Redis Plugin."
+su - $user -s /usr/bin/bash -- << EOF
+$phpbin $wpbin config set WP_REDIS_SCHEME unix --path=$webroot --quiet $wpcliopt
+$phpbin $wpbin config set WP_REDIS_PATH $redisdir/redis.sock --path=$webroot $wpcliopt
+$phpbin $wpbin plugin install redis-cache --activate --path=$webroot $wpcliopt
+$phpbin $wpbin redis enable --path=$webroot
+$phpbin $wpbin redis update-dropin --path=$webroot
+EOF
+
+return 1
+fi
+return 0
+}
+
+redis_status(){
+redis_status_res=$(su - $user -s /usr/bin/bash -c "$phpbin $wpbin redis status --path=$webroot --skip-themes 2>/dev/null")
+if [[ $redis_status_res == *'Ping: 1'* || $redis_status_res == *'Connected'* ]]; then
+  echo "Success: Redis connected."
+  return 0
+else
+  echo "Error: Redis not connected."
+  return 1
+fi
+}
+
+
+delete_redis(){
+su - $user -s /usr/bin/bash -- << EOF
+rm -r $redisdir 2>/dev/null
+pkill -9 redis 2>/dev/null
+
+$phpbin $wpbin config delete WP_REDIS_CONFIG --path=$webroot $wpcliopt 2>/dev/null
+$phpbin $wpbin config delete WP_REDIS_SCHEME --path=$webroot $wpcliopt 2>/dev/null
+$phpbin $wpbin config delete WP_REDIS_PATH --path=$webroot $wpcliopt 2>/dev/null
+$phpbin $wpbin plugin deactivate redis-cache --path=$webroot 2>/dev/null
+$phpbin $wpbin plugin deactivate object-cache-pro --path=$webroot 2>/dev/null
+$phpbin $wpbin plugin delete redis-cache --path=$webroot 2>/dev/null
+$phpbin $wpbin plugin delete object-cache-pro --path=$webroot 2>/dev/null
+
+EOF
+delete_cron redis
+}
+
+disable_redis(){
+su - $user -s /usr/bin/bash -c "$phpbin $wpbin redis disable --path=$webroot"
+}
+
+enable_redis(){
+
+redis_ping
+if [[ $? -eq 1 ]]; then  #Redis daemon is not running
+ echo 'Info: Configuring Redis Socket.'
+su - $user -s /usr/bin/bash -- << EOF
+[ ! -d $redisdir ] && mkdir $redisdir
+curl -s 'https://raw.githubusercontent.com/naqirizvi/rocket/main/redis.conf' -o $redisdir/redis.conf
+curl -s 'https://raw.githubusercontent.com/naqirizvi/rocket/main/start_redis.sh' -o $redisdir/start_redis.sh
+sed -i "s@REDISDIR@$redisdir@g" $redisdir/* 2>/dev/null
+chmod 755 $redisdir/start_redis.sh
+bash $redisdir/start_redis.sh
+EOF
+echo 'Info: Redis configuration complete.'
+else
+echo 'Info: Verifying the redis-cache plugin.'
+fi
+
+redis_plugin
+if [[ $? -eq 1 ]]; then redis_status; fi
+#Setup Cronjob for Redis
+setup_cron redis
+}
+
+enable_redis_pro(){
+
+redis_ping
+if [[ $? -eq 1 ]]; then  #Redis daemon is not running
+echo 'Info: Configuring Redis Socket.'
+su - $user -s /usr/bin/bash -- << EOF
+[ ! -d $redisdir ] && mkdir $redisdir
+curl -s 'https://raw.githubusercontent.com/naqirizvi/rocket/main/redis.conf' -o $redisdir/redis.conf
+curl -s 'https://raw.githubusercontent.com/naqirizvi/rocket/main/start_redis.sh' -o $redisdir/start_redis.sh
+sed -i "s@REDISDIR@$redisdir@g" $redisdir/* 2>/dev/null
+chmod 755 $redisdir/start_redis.sh
+bash $redisdir/start_redis.sh
+EOF
+echo 'Info: Redis configuration complete.'
+else
+echo 'Info: Verifying the object-cache-pro plugin.'
+fi
+
+
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html
+echo 'Info: Removing Old configuration if any.'
+$phpbin $wpbin config delete WP_REDIS_CONFIG --path=$webroot $wpcliopt 2>/dev/null
+$phpbin $wpbin config delete WP_REDIS_SCHEME --path=$webroot $wpcliopt 2>/dev/null
+$phpbin $wpbin config delete WP_REDIS_PATH --path=$webroot $wpcliopt 2>/dev/null
+echo 'Info: Adding Object Cache Pro configuration in WP-Config.php.'
+
+sed -i "/<?php/a \
+define( 'WP_REDIS_CONFIG', [  \
+'token' => '9489c9b05ea4d20cab4613259ae01fc3053459dc385b8dbcc746efda3e41', \
+'host' => '/home/\$USER/redis/redis.sock', \
+'database' => 0, \
+'maxttl' => 3600 * 24 * 7, \
+'timeout' => 1.0, \
+'read_timeout' => 1.0, \
+'split_alloptions' => false, \
+'debug' => false, \
+]);" wp-config.php
+echo 'Info: Installing Object Cache Pro.'
+$phpbin $wpbin plugin install https://rocketscripts.space/assets/object-cache-pro.zip --activate --path=$webroot $wpcliopt --quiet 2>/dev/null
+echo 'Info: Updating Object Cache Pro.'
+$phpbin $wpbin plugin update object-cache-pro --path=$webroot $wpcliopt --quiet  2>/dev/null
+echo 'Info: Activating Object Cache Pro.'
+$phpbin $wpbin redis enable --force --path=$webroot --quiet  2>/dev/null
+EOF
+
+redis_status
+
+#Setup Cronjob for Redis
+setup_cron redis
+}
+#enable_redis
+
+enable_smtp(){
+  subdomain=$(su - $user -s /usr/bin/bash -c 'cat /var/cpanel/userdata/$USER/main |grep main_domain |awk "{ print $2 }" |cut -d. -f1')
+  echo "Configuring SMTP for domain $subdomain"
+  su - $user  -s /usr/bin/bash -c "curl -s https://scripts.onrocket.com/setupemail | bash;"
+  status=$?
+  if [[ $status -eq 0  ]]
+  then  echo "SMTP configured successfully"
+    lsphp=$(su - $user -s /usr/bin/bash -c "pkill -f lsphp;")
+    if [[ $lsphp -eq 'Terminated' ]]
+      then echo "LSPHP processes killed successfully"
+    else echo "Please kill LSPHP for user manually"
+      exit $lsphp
+    fi
+  else
+    echo "Error configuring SMTP"
+    exit $status
+  fi
+}
+
+modified_files(){
+  su - $use -s /usr/bin/bash -c "cd /home/$user/public_html && find . -mtime -2 | sed '/cache/d' | sed '/uploads/d'"
+}
+
+#####################WORDPRESS START
+
+Mainmenu(){
+#printf "${NORMAL}${RED}3 `sleep .2` ${NORMAL}${YELLOW}2 `sleep .2` ${NORMAL}${GREEN}1 `sleep .2` ${NORMAL}${CYAN} ... ${NORMAL}${GREEN} Lift Off. `sleep .2`${NC}\n"
+#printf "${NORMAL}${CYAN}Thrusting site URL${NC}\n"; sleep .2;
+
+while :
+do
+read -ep "Select Main Menu [dfmsw]: " -n1 choice
+case $choice in
+  "d"|"D"|"f"|"F"|"m"|"M"|"s"|"S"|"u"|"U"|"w"|"W") read -ep $'Select Sub Menu [1-9]: ' -n1 choice2
+  ;;&
+  "f"|"F")
+    if ! checkRoot 'root'; then
+      echo 'Forbidden: Requires sudo privilege.'
+      exit
+    fi
+  ;;&
+  "u"|"U")
+    case $choice2 in
+      1) echo 'Get SiteID & User'                 ;;&
+      2) echo 'DNS Lookup'                        ;;&
+      1|2) read -p 'Domain: ' domain              ;;&
+      1) domainlookup $domain; sleep .8           ;;
+      2) dnslookup $domain; sleep .8              ;;
+      3) domain_header $domain; sleep .8          ;;
+      q|Q) exit 0                                 ;;
+      *)   echo 'Invalid choice.'                 ;;
+    esac
+  ;;
+  "d"|"D")
+    case $choice2 in
+      1) echo "Site's Autoload Size"                   ;;&
+      2) echo "Site's Database Size"                   ;;&
+      3) echo 'Fix DB credentails'                     ;;&
+      4) echo 'MyIsam to InnoDB'                       ;;&
+      5) echo 'Change collation (utf8mb4_unicode_ci)'  ;;&
+      1) valid_user; site_autoload_size;;
+      2) valid_user; site_db_size         ;;
+      3) valid_user; fix_db_credentials   ;;
+      4) valid_user; myisam_2_innodb      ;;
+      5) valid_user; fix_db_collation     ;;
+      *) echo 'Invalid choice.'           ;;
+    esac  
+  ;;
+  "f"|"F")
+    case $choice2 in
+      1) echo 'Unblock ModSec'          ;;&
+      2) echo 'Unblock SSH/sFTP'        ;;&
+      3) echo 'Allow cPanel'            ;;&
+      4) echo 'Enable Remote MySQL'     ;;&
+      5) echo 'Open Outbound Port'      ;;&
+      1|2|3|4) while valid_ip; [[ $? -ne 0 ]]; do sleep .8; done              ;;&
+      1) IPWhitelisting $ipaddr; sleep .8                                     ;;
+      2) csf_deny_remove  $ipaddr; sleep .8                                   ;;
+      3) csf_cpanel_whitelist $ipaddr; sleep .8                               ;;
+      4) remote_mysql $ipaddr; sleep .8                                       ;;
+      5) while openport; [[ $? -ne 0 ]]; do sleep .8; done                    ;;
+      *) echo 'Invalid choice.'                                               ;;
+    esac
+  ;;
+  "m"|"M")
+    case $choice2 in
+      1) valid_user; migrate_ssh 'SSH - RSYNC'  ;;
+      2) valid_user; migrate_ai1wm              ;;
+      3) valid_user; migrate_ssh 'Kinsta'       ;;
+      4) valid_user; migrate_ssh 'FlyWheel'     ;;
+      5) valid_user; migrate_ssh 'Cloudways'    ;;
+      6) valid_user; migrate_ssh 'WP Engine'    ;;
+      7) valid_user; migrate_ssh 'Site Ground'  ;;
+      8) valid_user; migrate_seravo     ;;
+      *) echo 'Invalid choice.'         ;;
+    esac
+  ;;
+  "s"|"S")
+    case $choice2 in
+      1) echo 'FTP Connections'         ;;&
+      2) echo 'Memory usage'            ;;&
+      3) echo 'SWAP Usage'              ;;&
+      4) echo 'Server XRay'             ;;&
+      5) echo 'MySQL Status'	          ;;&             
+      6) echo 'MySQL Data Length'       ;;&
+      7) echo 'MySQL Disk by Database'  ;;&
+      8) echo 'MySQL Disk by Tables'    ;;&
+      1) ftpconn; sleep .8              ;;
+      2) memoryusage; sleep .8          ;;
+      3) swapusage; sleep .8            ;;
+      4) ServerXray; sleep .8           ;;
+      5) mysqladmin status; sleep .8    ;;
+      6) MySQL_rowcount; sleep .8       ;;
+      7) MySQL_dbsize; sleep .8         ;;
+      8) MySQL_tablesize; sleep .8      ;;
+      *) echo 'Invalid choice.'         ;;
+    esac  ;;
+  "w"|"W")
+    case $choice2 in
+      1) echo 'WP-Admin SSO'              ;;&
+      2) echo 'cPanel SSO'                ;;&
+      3) echo 'Enable WP Cron'            ;;&
+      4) echo 'Enable SMTP'               ;;&
+      5) echo 'Reset Permissions'         ;;&
+      6) echo 'List Modified Files - 24h' ;;&
+      7) echo 'Install Redis'             ;;&
+      8) echo 'Install Redis PRO'         ;;&
+      9) echo 'Delete Redis'              ;;&
+      1) valid_user; wordpress_sso               ;;
+      2) valid_user; cpanel_sso; sleep .8        ;;
+      3) valid_user; setup_cron wp; sleep .8     ;;
+      4) valid_user; enable_smtp; sleep .8       ;;
+      5) valid_user; reset_permissions; sleep .8 ;;
+      6) valid_user; modified_files; sleep .8    ;;
+      7) valid_user; enable_redis; sleep .8      ;;
+      8) valid_user; enable_redis_pro; sleep .8  ;;
+      9) valid_user; delete_redis; sleep .8      ;;
+      *) echo 'Invalid choice.'        ;;
+    esac
+  ;;
+  b|B) break   ;;
+  h|H) help; continue   ;;
+  q|Q) exit 0  ;;
+  *)  echo -e "Error: Invalid option, please try again"  ;;
+esac
+
+cat <<_EOF_
+Main Menu
+ [s] Server
+ [u] URL
+ [w] Wordpress
+ [d] Database
+ [f] Firewall
+ [m] Migration
+ [h] Help
+ [q] Quit
+_EOF_
+
+
+done
+}
+
+
+rlaunch(){
+case $1 in
+  openport)         openport $2                                            ;;
+  whitelist_modsec) valid_ip $2   && IPWhitelisting $ipaddr                ;;
+  resetperms)       valid_user $2 && reset_permissions                     ;;
+  fixwpcreds)       valid_user $2 && fix_db_credentials                    ;;
+  enable_redis)     valid_user $2 && enable_redis                          ;;
+  delete_redis)     valid_user $2 && delete_redis                          ;;
+  myisam2innodb)    valid_user $2 && myisam_2_innodb                       ;;
+  wpcron)           valid_user $2 && setup_cron wp                         ;;
+  cpanellink)       valid_user $2 && cpanel_sso                            ;;
+  sso)              valid_user $2 && wordpress_sso                         ;;
+  smtp)             valid_user $2 && enable_smtp                           ;;
+  *) help false;    exit 1                                                 ;;
+esac
+}
+
+option=""
+Msg="No Flag provided, Program Execution Completed Sucessfully!"
+
+phpbin='/usr/local/bin/php'
+wpbin='/usr/local/bin/wp'
+wpcliopt='--skip-themes --skip-plugins'
+
+while getopts ":dh" option; do
+case $option in
+    h)
+      help
+      exit 1
+    ;;
+    d)
+cat <<_EOF_
+user='onrocket'
+ux8cqhn
+Ahs09
+https://tiptopclean.eu/wp-content/ai1wm-backups/tiptopclean.eu-20230123-112234-4tvjxz.wpress
+
+home739918234.1and1-data.host
+u93776300
+@Blablacar2018
+
+_EOF_
+exit 0
+    ;;
+    \? )
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+    ;;
+esac
+done
+
+if [ $# -eq 0 ]
+  then
+    help
+    Mainmenu
+  else
+    rlaunch $1 $2
+fi

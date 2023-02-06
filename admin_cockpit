@@ -797,8 +797,8 @@ echo 'Table Prefix:' && prefix=\$(wp config get table_prefix) && echo \$prefix
 echo \$prefix > .table_prefix
 echo '==========================================================================================='
 wp db export rocketdb.sql 2> /dev/null
+echo "INFO: Securing Permissions on Source Host"
 chmod 400 rocketdb.sql .table_prefix
-print_out info "Securing Permissions on Source Host"
 EOF
 if [ ! $? -eq 0 ]; then exit 1; fi
 url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
@@ -810,17 +810,17 @@ reset_permissions
 if [ ! $? -eq 0 ]; then exit 1; fi
 
 su - $user -s /usr/bin/bash -- << EOF
-print_out info "Importing Database Backup"
+echo "INFO: Importing Database Backup"
 $phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
 if [ ! $? -eq 0 ]; then exit 1; fi
 prefix=\$(cat .table_prefix)
-print_out info "Updating Prefix to $prefix"
+echo "INFO: Updating Prefix to $prefix"
 $phpbin $wpbin config set table_prefix "$prefix"
-print_out info "Running Search & Replace"
+echo "INFO: Running Search & Replace"
 $phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
-print_out info "Clearing Cache"
+echo "INFO: Clearing Cache"
 $phpbin $wpbin cache flush --path=$webroot $wpcliopt && $phpbin $wpbin rewrite flush --path=$webroot $wpcliopt && rm -rf wp-content/cache
-print_out info "Removing rocketdb.sql"
+echo "INFO: Removing rocketdb.sql"
 rm /home/$user/public_html/rocketdb.sql
 EOF
 if [ ! $? -eq 0 ]; then exit 1; fi

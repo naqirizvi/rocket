@@ -769,29 +769,29 @@ cd ~/htdocs/wp-content
 rm rocketdb.sql
 EOF
 echo "Success: Migration Completed"
-
 }
-
 
 function migrate_ssh(){
 cat <<_EOF_
+++++++++++++++++++++
 $1 Migration
 ++++++++++++++++++++
+Please provide Remote server details.
 _EOF_
-read -rep 'Please provide Source Host: ' mgHost
-read -rep 'Please provide SSH Port [22]: ' mgPort
-read -rep 'Please provide SSH User: ' mgUser
-read -sep 'Please provide SSH Password: ' mgPass
-read -rep 'Please provide Domain: ' mgDomain
-read -rep 'Please provide Webroot: ' mgRoot
+read -rep 'Remote Host: ' mgHost
+read -rep 'SSH Port [22]: ' mgPort
+read -rep 'SSH User: ' mgUser
+read -sep 'SSH Password: ' mgPass
+read -rep 'Source Domain: ' mgDomain
+read -rep 'Source Webroot: ' mgRoot
 mgPort=${mgPort:-22}
-if [ $mgPort != 22 ]; then #whitelist port if < 22
+if [ $mgPort != 22 ]; then
  openport $mgPort
 fi
 print_out info "Runnign Command: ssh $mgUser@$mgHost -p $mgPort ${NC}"
 sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
-echo '==========================================================================================='
+echo '======================= Collecting Details from Remote Host ==============================='
 printf 'Site:' && wp option get home
 printf 'Path:' && pwd
 printf 'Prefix:' && prefix=\$(wp config get table_prefix) &&  echo "\$prefix" | tee .table_prefix
@@ -804,7 +804,7 @@ EOF
 url=$(su - $user -s /usr/bin/bash -c "$phpbin $wpbin option get home --path=$webroot")
 print_out info "Migrating to site $url"
 print_out info "Accessing Remote Host for Rsync"
-sshpass -p $mgPass rsync -avz --info=progress2 --info=name0 --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+sshpass -p $mgPass rsync -avz --info=progress2 --info=name0 --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
 reset_permissions
 fix_db_credentials
 su - $user -s /usr/bin/bash -- << EOF

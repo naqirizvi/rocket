@@ -797,34 +797,38 @@ echo 'Table Prefix:' && prefix=\$(wp config get table_prefix) && echo \$prefix
 echo \$prefix > .table_prefix
 echo '==========================================================================================='
 wp db export rocketdb.sql 2> /dev/null
+chmod 400 rocketdb.sql .table_prefix
+print_out info "Securing Permissions on Source Host"
 EOF
 if [ ! $? -eq 0 ]; then exit 1; fi
-#url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
-su - $user -s /usr/bin/bash -- << EOF
-url=\$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
-echo "Info: Migrating to site $url"
-echo "Info: Accessing remote Host for Rsync"
+url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
+print_out info "Migrating to site $url"
+print_out info "Accessing remote Host for Rsync"
 sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-config.php --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+
+reset_permissions
 if [ ! $? -eq 0 ]; then exit 1; fi
-echo "Info: Taking Database Backup"
+
+su - $user -s /usr/bin/bash -- << EOF
+print_out info "Importing Database Backup"
 $phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
 if [ ! $? -eq 0 ]; then exit 1; fi
 prefix=\$(cat .table_prefix)
-echo "Info: Updating Prefix to $prefix"
+print_out info "Updating Prefix to $prefix"
 $phpbin $wpbin config set table_prefix "$prefix"
-echo "Info: Running Search & Replace"
+print_out info "Running Search & Replace"
 $phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
-echo "Info: Clearing Cache"
+print_out info "Clearing Cache"
 $phpbin $wpbin cache flush --path=$webroot $wpcliopt && $phpbin $wpbin rewrite flush --path=$webroot $wpcliopt && rm -rf wp-content/cache
-echo "Info: Removing rocketdb.sql"
+print_out info "Removing rocketdb.sql"
 rm /home/$user/public_html/rocketdb.sql
 EOF
 if [ ! $? -eq 0 ]; then exit 1; fi
 sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
-rm rocketdb.sql
+rm rocketdb.sql .table_prefix
 EOF
-echo "Success: Migration Completed"
+print_out success "Migration Completed"
 }
 #####################MIGRATION STOP
 
@@ -870,10 +874,10 @@ cpanel_sso(){
 
 ###Linux permission reset
 function reset_permissions(){
-  echo "Resetting Permissions for $user"
+  print_out 'info' "Resetting Permissions for $user"
   find /home/$user/public_html/ -type f -exec chmod 644 {} \;
   find /home/$user/public_html/ -type d -exec chmod 755 {} \;
-  echo "Permission Reset Complete."
+  print_out 'success' "Permission Reset Complete."
 }
 
 ###Setup Cron

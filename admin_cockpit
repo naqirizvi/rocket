@@ -46,6 +46,13 @@ FAINT='\e[2'
 ITALIC='\e[3'
 LINK='\e[4'
 
+option=""
+Msg="No Flag provided, Program Execution Completed Sucessfully!"
+
+phpbin='/usr/local/bin/php'
+wpbin='/usr/local/bin/wp'
+wpcliopt='--skip-themes --skip-plugins'
+
 #print colorful messages
 function print_out(){
 case $1 in
@@ -90,7 +97,7 @@ function box_out()
 help()
 {
 if [ -z "$1" ]; then
-#print_out 'Ignition...'; sleep .2
+printf "${NORMAL}${YELLOW}Ignition...${NC}\n"; sleep .2
 cat <<_EOF_
 ------------------------------------Cockpit's Main Menu------------------------ [q] Quit --------
 
@@ -785,7 +792,8 @@ ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
 pwd
 echo '==========================================================================================='
-echo 'Table Prefix' && wp config get table_prefix
+echo 'Table Prefix' && prefix=\$(wp config get table_prefix)
+echo \$prefix > .table_prefix
 echo '==========================================================================================='
 sleep .8
 wp db export rocketdb.sql 2> /dev/null
@@ -801,6 +809,9 @@ echo "Info: Accessing remote Host for Rsync"
 rsync -avz --ignore-existing --exclude wp-config.php -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
 echo "Info: Taking Database Backup"
 $phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
+prefix=$(cat .table_prefix)
+echo "Info: Updating Prefix to $prefix"
+$phpbin $wpbin config set table_prefix $prefix
 echo "Info: Running Search & Replace"
 $phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
 echo "Info: Clearing Cache"
@@ -1131,6 +1142,7 @@ case $choice in
       3) valid_user; fix_db_credentials   ;;
       4) valid_user; myisam_2_innodb      ;;
       5) valid_user; fix_db_collation     ;;
+      q|Q) exit 0                         ;;
       *) echo 'Invalid choice.'           ;;
     esac  
   ;;
@@ -1147,6 +1159,7 @@ case $choice in
       3) csf_cpanel_whitelist $ipaddr; sleep .8                               ;;
       4) remote_mysql $ipaddr; sleep .8                                       ;;
       5) while openport; [[ $? -ne 0 ]]; do sleep .8; done                    ;;
+      q|Q) exit 0                                                             ;;
       *) echo 'Invalid choice.'                                               ;;
     esac
   ;;
@@ -1160,10 +1173,11 @@ case $choice in
       6) valid_user; migrate_ssh 'WP Engine'    ;;
       7) valid_user; migrate_ssh 'Site Ground'  ;;
       8) valid_user; migrate_seravo     ;;
+      q|Q) exit 0                       ;;
       *) echo 'Invalid choice.'         ;;
     esac
   ;;
-  "s"|"S")
+  "a"|"A")
     case $choice2 in
       1) echo 'FTP Connections'         ;;&
       2) echo 'Memory usage'            ;;&
@@ -1181,6 +1195,7 @@ case $choice in
       6) MySQL_rowcount; sleep .8       ;;
       7) MySQL_dbsize; sleep .8         ;;
       8) MySQL_tablesize; sleep .8      ;;
+      q|Q) exit 0                       ;;
       *) echo 'Invalid choice.'         ;;
     esac  ;;
   "w"|"W")
@@ -1203,6 +1218,7 @@ case $choice in
       7) valid_user; enable_redis; sleep .8      ;;
       8) valid_user; enable_redis_pro; sleep .8  ;;
       9) valid_user; delete_redis; sleep .8      ;;
+      q|Q) exit 0                                ;;
       *) echo 'Invalid choice.'        ;;
     esac
   ;;
@@ -1214,7 +1230,7 @@ esac
 
 cat <<_EOF_
 Main Menu
- [s] Server
+ [a] Server
  [u] URL
  [w] Wordpress
  [d] Database
@@ -1246,12 +1262,7 @@ case $1 in
 esac
 }
 
-option=""
-Msg="No Flag provided, Program Execution Completed Sucessfully!"
 
-phpbin='/usr/local/bin/php'
-wpbin='/usr/local/bin/wp'
-wpcliopt='--skip-themes --skip-plugins'
 
 while getopts ":dh" option; do
 case $option in

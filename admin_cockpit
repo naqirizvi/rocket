@@ -99,7 +99,7 @@ help()
 if [ -z "$1" ]; then
 printf "${NORMAL}${YELLOW}Ignition...${NC}\n"; sleep .2
 cat <<_EOF_
-------------------------------------Cockpit's Main Menu------------------------ [q] Quit --------
+------------------------------------Cockpit's Main Menu------------------------ [q] Quit -------
 
  [w] Wordpress                                 [f] Firewall
      (1) WP-Admin SSO                              (1) Unblock ModSec
@@ -124,7 +124,7 @@ cat <<_EOF_
      (2) DNS Lookup                                (8) MySQL Disk by Database
      (3) Header, Redirect, Cache & TTFB checker    (9) MySQL Disk by Tables
 
--------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------- Version 0.6 -----
 _EOF_
 else
 cat <<_EOF_

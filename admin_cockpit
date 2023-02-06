@@ -124,7 +124,7 @@ cat <<_EOF_
      (2) DNS Lookup                                (8) MySQL Disk by Database
      (3) Header, Redirect, Cache & TTFB checker    (9) MySQL Disk by Tables
 
-------------------------------------------------------------------------------- Version 0.6.1 ----
+------------------------------------------------------------------------------- Version 0.6.2 ----
 _EOF_
 else
 cat <<_EOF_
@@ -198,7 +198,7 @@ function valid_ip(){
 
 
 if [[ "$ipaddr" == "" ]]
-then echo "Error: Please specify a IP."
+then print_out error 'Please specify an IP'
 return 1
 else
   local  stat=1
@@ -227,13 +227,14 @@ if [ -z "$1" ];  then
 else
   user=$1
 fi
+  printf "${NORMAL}${CYAN}Thrusting site user${NC}\n"; sleep .2;
   usercheck=$(/usr/sbin/whmapi1 accountsummary user=$user | grep result: | awk '{ print $2 }')
   if [[ $usercheck == 1 ]]
   then true;  
   homedir=/home/$user
   webroot=$homedir/public_html
   redisdir=$homedir/redis
-  else echo $user is not a valid username. Please check and try again.; sleep .8
+  else print_out error "$user is not a valid username. Please check and try again."; sleep .8
   exit 1
   fi
 }
@@ -363,14 +364,14 @@ swapusage(){
 domainlookup(){
   res=$(curl -s -XPOST -H "content-type: application/json" https://api.rocket.net/internal/v1/sites/lookup -d "{\"domain\": \"$1\"}")
   if [[ $res == *"site_id"* ]]; then
-    echo 'Success: Domain exists on Rocket.net';
+    print_out success 'Domain exists on Rocket.net';
     echo 'Site ID:'; echo "$res" | jq -r '.site_id'
     echo 'Username:'; echo "$res" | jq -r '.username'
     exit 0
   elif [[ $res == *"Unable to find installation with given domain"* ]]; then
-    echo 'Error: Unable to find installation with given domain.'
+    print_out error 'Unable to find installation with given domain.'
   else
-    echo 'Error: Failed to lookup the domain.'
+    print_out error 'Failed to lookup the domain.'
   fi
 }
 
@@ -424,7 +425,7 @@ else
   echo SecRule REMOTE_ADDR \"@ipMatch $ip3.0/24\" \"phase:1,id:$epoch,nolog,allow\" >> $modconf
   #true && echo Launch Successful! #uncomment for testing
   /scripts/restartsrv_apache --restart
-  echo "Success: $fullip Whitelisted in Mod Security"
+  print_out success "$fullip Whitelisted in Mod Security"
   exit 0
 fi
 }
@@ -433,7 +434,7 @@ fi
 function csf_deny_remove(){
  if [[ $(csf -dr $1| grep 'Removing rule') ]]
  then
- echo "Success: IP Address ($1) is now whitelisted"
+ print_out success "IP Address ($1) is now whitelisted"
  else
  echo "Info: IP Address ($1) is not blocked"
  fi
@@ -443,21 +444,21 @@ function csf_deny_remove(){
 function csf_cpanel_whitelist(){
   out=$(csf -a "tcp|in|d=2083|s=$1")
   if [[ $out =~ 'Adding tcp' ]]; then
-  echo "Success: IP Address ($1) is now whitelisted on port 2083"; sleep .2
+  print_out success "IP Address ($1) is now whitelisted on port 2083"; sleep .2
   elif [[ $out =~ 'already in the allow' ]]; then
   echo "Info: IP Address ($1) is already whitelisted on port 2083"; sleep .2
   else
-  echo "Error: $out"
+  print_out error "$out"
   fi
   out=$(csf -a "tcp|in|d=2087|s=$1")
   if [[ $out =~ 'Adding tcp' ]]; then
-  echo "Success: IP Address ($1) is now whitelisted on port 2087"
+  print_out success "IP Address ($1) is now whitelisted on port 2087"
   exit 0
   elif [[ $out =~ 'already in the allow' ]]; then
   echo "Info: IP Address ($1) is already whitelisted on port 2087"
   exit 0
   else
-  echo "Error: $out"
+  print_out error "$out"
   fi
 }
 
@@ -466,17 +467,17 @@ function remote_mysql(){
   valid_user $user
   out=$(csf -a "tcp|in|d=3306|s=$1")
   if [[ $out =~ 'Adding tcp' ]]; then
-  echo "Success: MySQL is now accepting connections from ($1)"; sleep .2
+  print_out success "MySQL is now accepting connections from ($1)"; sleep .2
   elif [[ $out =~ 'already in the allow' ]]; then
   echo "Info: MySQL is already accepting connections from ($1)"; sleep .2
   else
-  echo "Error: $out"
+  print_out error "$out"
   fi
   if [[ $(uapi  --user=$user Mysql add_host host=$1 | grep 'status: 1') ]]; then
-  echo "Success: Remote MySQL is now enabled for ($user)"; sleep .8
+  print_out success "Remote MySQL is now enabled for ($user)"; sleep .8
   exit 0
   else
-  echo "Error: Remote MySQL is not enabled for ($user)"
+  print_out error "Remote MySQL is not enabled for ($user)"
   fi
 }
 
@@ -491,7 +492,7 @@ else
 fi
 
 if [[ "$newport" == "" ]]
-then echo "Error: Please specify a port number."
+then print_out error 'Please specify a port number'
 return 1
 else
   if [[ $(echo $newport| grep -E '^([0-9]{4,5}$)') ]]
@@ -501,12 +502,12 @@ else
       tcpout=$(grep ^TCP_OUT $csfconf | cut -d\" -f2 );
       #echo $tcpout
       sed  "s@^TCP_OUT.*@TCP_OUT = \"$tcpout,$newport\"@" $csfconf -i
-      /usr/sbin/csf -r >/dev/null && echo "Success: Port $newport is now open."; sleep .8
+      /usr/sbin/csf -r >/dev/null && print_out success "Port $newport is now open."; sleep .8
     else
       echo "Info: $newport is already open."; sleep .8
     fi
   else
-    echo "Error: $newport is not a valid port number.";
+    print_out error "$newport is not a valid port number";
     return 1
   fi
 fi
@@ -567,7 +568,7 @@ else
 print_out error 'Wordpress Installation not found'
 fi
 else
-print_out error 'Error: Softaculous Installation not found'
+print_out error 'Softaculous Installation not found'
 fi
 EOF
 }
@@ -592,7 +593,7 @@ $phpbin $wpbin rewrite flush
 $phpbin $wpbin cdn purge
 rm /home/$user/tmp/dbtables.txt
 EOF
-echo "Success: Conversion Completed Successfully"
+print_out success 'Conversion Completed Successfully'
 }
 
 ###Mysql Engine conversion
@@ -607,7 +608,7 @@ echo "Info: Converting \${WPTABLE} to InnoDB"
 $phpbin $wpbin db query "ALTER TABLE \${WPTABLE} ENGINE=InnoDB" --skip-plugins --skip-themes
 done
 IFS="$OLDIFS"
-echo "Success: Conversion from MyISAM to InnoDB completed."
+echo 'Success: Conversion from MyISAM to InnoDB completed'
 EOF
 }
 #####################DATABASE STOP
@@ -640,7 +641,7 @@ EOF
   1|2)
   read -p 'Provide the URL/path of All-in-One-backup(.wpress) file:' filepath
     if [ -z "$filepath" ]; then
-      echo 'Error: No URL/path provided.' ; exit 1
+      print_out error 'No URL/path provided.' ; exit 1
     fi
   ;;&
   1)
@@ -648,7 +649,7 @@ EOF
     if [[ $status_code -eq 200 ]]; then
       su - $user -s /usr/bin/bash -c "wget -c --header='Accept: text/html' --user-agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:21.0) Gecko/20100101 Firefox/21.0' -P /home/$user/public_html/wp-content/ai1wm-backups/ $filepath"
     else
-      echo "Error: $status_code Unable to download backup."; exit 1
+      print_out error "$status_code Unable to download backup"; exit 1
     fi
   ;;
   2) 
@@ -656,7 +657,7 @@ EOF
     mv $filepath /home/$user/public_html/wp-content/ai1wm-backups/
     echo $(basename "$filepath")
   else
-    echo "Error: Backup file doens't exists."; exit 1
+    print_out error "Backup file doens't exists"; exit 1
   fi
   ;;
   3) ;;
@@ -681,7 +682,7 @@ $phpbin $wpbin ai1wm list-backups --quiet
 EOF
 retVal=$?
 if [ $retVal -ne 0 ]; then
-    echo 'Error: Migration failed'; exit $retVal
+    print_out error 'Migration failed'; exit $retVal
 else
   if [[ $(ls -1 /home/$user/public_html/wp-content/ai1wm-backups/*.wpress 2>/dev/null | wc -l) -gt 0 ]]; then
     if [[ $choice3 -eq 3 ]]; then
@@ -691,7 +692,7 @@ else
     fi
     migration_status=$(su - $user -s /usr/bin/bash -c "cd /home/$user/public_html && $phpbin $wpbin ai1wm restore $wpressname --yes")
   else
-    echo 'No Backup found.'
+    print_out error 'No Backup found.'
   fi
 fi
 
@@ -712,9 +713,9 @@ $phpbin $wpbin rewrite flush
 $phpbin $wpbin cdn purge
 $phpbin $wpbin option get home --quiet --skip-plugins --skip-themes
 EOF
-  echo 'Success: Migration completed Successfully.'
+  print_out success 'Migration completed Successfully.'
 else
-  echo 'Error: Migration failed.'
+  print_out error 'Migration failed.'
 fi
 }
 
@@ -768,7 +769,7 @@ ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd ~/htdocs/wp-content
 rm rocketdb.sql
 EOF
-echo "Success: Migration Completed"
+print_out success 'Migration Completed'
 }
 
 function migrate_ssh(){
@@ -778,12 +779,13 @@ $1 Migration
 ++++++++++++++++++++
 Please provide Remote server details.
 _EOF_
+read -rep 'Source Domain: ' mgDomain
+read -rep 'Source Webroot: ' mgRoot
 read -rep 'Remote Host: ' mgHost
 read -rep 'SSH Port [22]: ' mgPort
 read -rep 'SSH User: ' mgUser
 read -sep 'SSH Password: ' mgPass
-read -rep 'Source Domain: ' mgDomain
-read -rep 'Source Webroot: ' mgRoot
+echo
 mgPort=${mgPort:-22}
 if [ $mgPort != 22 ]; then
  openport $mgPort
@@ -819,7 +821,7 @@ $phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --s
 echo -e "${NORMAL}${GREY}INFO:     Clearing Cache${NC}"
 $phpbin $wpbin cache flush $wpcliopt && $phpbin $wpbin rewrite flush $wpcliopt && rm -rf wp-content/cache
 echo -e "${NORMAL}${GREY}INFO:     Removing rocketdb.sql${NC}"
-rm rocketdb.sql
+rm rocketdb.sql .table_prefix
 EOF
 sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
@@ -908,10 +910,10 @@ fi
 if [[ $1 == 'wp' ]]; then
   su - $user -s /usr/bin/bash -c "$phpbin $wpbin config set DISABLE_WP_CRON true --path=$webroot $wpcliopt"
   if [ $? -ne 0 ]; then
-    echo 'Error: Unable to set DISABLE_WP_CRON in wp-config.php'; sleep .8; exit 1
+    print_out error 'Unable to set DISABLE_WP_CRON in wp-config.php'; sleep .8; exit 1
   fi
 fi
-echo 'Success: Cron configured successfully'; sleep .8; exit 0
+print_out success 'Cron configured successfully'; sleep .8; exit 0
 crontab -l -u $user
 }
 
@@ -931,11 +933,11 @@ count1=$(crontab -l -u $user | wc -l)
 crontab -l -u $user | grep -v "$cron"  | crontab -u $user -
 count2=$(crontab -l -u $user | wc -l)
   if [[ $count2 < $count1 ]]; then
-    echo 'Success: Cron removed successfully.'; sleep .2
+    print_out success 'Cron removed successfully.'; sleep .2
   elif [[ $count2 == $count1 ]]; then
     echo 'Info: Cronjob not found, nothing to delete.'; sleep .2
   else
-    echo 'Error: Unable to delete Cron. These are the cronjobs'; sleep .2
+    print_out error 'Unable to delete Cron. These are the cronjobs'; sleep .2
     crontab -l -u $user; sleep .2
   fi
 fi
@@ -973,10 +975,10 @@ return 0
 redis_status(){
 redis_status_res=$(su - $user -s /usr/bin/bash -c "$phpbin $wpbin redis status --path=$webroot --skip-themes 2>/dev/null")
 if [[ $redis_status_res == *'Ping: 1'* || $redis_status_res == *'Connected'* ]]; then
-  echo "Success: Redis connected."
+  print_out success 'Redis connected'
   return 0
 else
-  echo "Error: Redis not connected."
+  print_out error 'Redis not connected'
   return 1
 fi
 }
@@ -1106,9 +1108,7 @@ modified_files(){
 #####################WORDPRESS START
 
 Mainmenu(){
-#printf "${NORMAL}${RED}3 `sleep .2` ${NORMAL}${YELLOW}2 `sleep .2` ${NORMAL}${GREEN}1 `sleep .2` ${NORMAL}${CYAN} ... ${NORMAL}${GREEN} Lift Off. `sleep .2`${NC}\n"
-#printf "${NORMAL}${CYAN}Thrusting site URL${NC}\n"; sleep .2;
-
+printf "${NORMAL}${RED}3 `sleep .2` ${NORMAL}${YELLOW}2 `sleep .2` ${NORMAL}${GREEN}1 `sleep .2` ${NORMAL}${CYAN} ... ${NORMAL}${GREEN} Lift Off. `sleep .2`${NC}\n"
 while :
 do
 read -ep "Select Main Menu [dfmsw]: " -n1 choice
@@ -1117,7 +1117,7 @@ case $choice in
   ;;&
   "f"|"F")
     if ! checkRoot 'root'; then
-      echo 'Forbidden: Requires sudo privilege.'
+      print_out error 'Forbidden: Requires sudo privilege.'
       exit
     fi
   ;;&
@@ -1130,7 +1130,7 @@ case $choice in
       2) dnslookup $domain; sleep .8              ;;
       3) domain_header $domain; sleep .8          ;;
       q|Q) exit 0                                 ;;
-      *)   echo 'Invalid choice.'                 ;;
+      *) print_out error 'Invalid choice.'        ;;
     esac
   ;;
   "d"|"D")
@@ -1141,12 +1141,12 @@ case $choice in
       4) echo 'MyIsam to InnoDB'                       ;;&
       5) echo 'Change collation (utf8mb4_unicode_ci)'  ;;&
       1) valid_user; site_autoload_size;;
-      2) valid_user; site_db_size         ;;
-      3) valid_user; fix_db_credentials   ;;
-      4) valid_user; myisam_2_innodb      ;;
-      5) valid_user; fix_db_collation     ;;
-      q|Q) exit 0                         ;;
-      *) echo 'Invalid choice.'           ;;
+      2) valid_user; site_db_size                      ;;
+      3) valid_user; fix_db_credentials                ;;
+      4) valid_user; myisam_2_innodb                   ;;
+      5) valid_user; fix_db_collation                  ;;
+      q|Q) exit 0                                      ;;
+      *) print_out error 'Invalid choice.'             ;;
     esac  
   ;;
   "f"|"F")
@@ -1163,7 +1163,7 @@ case $choice in
       4) remote_mysql $ipaddr; sleep .8                                       ;;
       5) while openport; [[ $? -ne 0 ]]; do sleep .8; done                    ;;
       q|Q) exit 0                                                             ;;
-      *) echo 'Invalid choice.'                                               ;;
+      *) print_out error 'Invalid choice.'                                               ;;
     esac
   ;;
   "m"|"M")
@@ -1177,7 +1177,7 @@ case $choice in
       7) valid_user; migrate_ssh 'Site Ground'  ;;
       8) valid_user; migrate_seravo     ;;
       q|Q) exit 0                       ;;
-      *) echo 'Invalid choice.'         ;;
+      *) print_out error 'Invalid choice.'         ;;
     esac
   ;;
   "a"|"A")
@@ -1199,7 +1199,7 @@ case $choice in
       7) MySQL_dbsize; sleep .8         ;;
       8) MySQL_tablesize; sleep .8      ;;
       q|Q) exit 0                       ;;
-      *) echo 'Invalid choice.'         ;;
+      *) print_out error 'Invalid choice.'         ;;
     esac  ;;
   "w"|"W")
     case $choice2 in
@@ -1222,13 +1222,13 @@ case $choice in
       8) valid_user; enable_redis_pro; sleep .8  ;;
       9) valid_user; delete_redis; sleep .8      ;;
       q|Q) exit 0                                ;;
-      *) echo 'Invalid choice.'        ;;
+      *) print_out error 'Invalid choice.'        ;;
     esac
   ;;
   b|B) break   ;;
   h|H) help; continue   ;;
   q|Q) exit 0  ;;
-  *)  echo -e "Error: Invalid option, please try again"  ;;
+  *)  print_out error "Error: Invalid option, please try again"  ;;
 esac
 
 cat <<_EOF_
@@ -1289,7 +1289,7 @@ _EOF_
 exit 0
     ;;
     \? )
-      echo "Invalid option: -$OPTARG" >&2
+      print_out error "Invalid option: -$OPTARG" >&2
       exit 1
     ;;
 esac

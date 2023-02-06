@@ -785,7 +785,7 @@ read -rep 'Please provide SSH Password: ' mgPass
 read -rep 'Please provide Domain: ' mgDomain
 read -rep 'Please provide Webroot: ' mgRoot
 mgPort=${mgPort:-22}
-if [ $mgPort > 22 ]; then #whitelist port if < 22
+if [ $mgPort != 22 ]; then #whitelist port if < 22
  openport $mgPort
 fi
 echo "Runnign Command: ssh $mgUser@$mgHost -p $mgPort"
@@ -798,20 +798,20 @@ echo \$prefix > .table_prefix
 echo '==========================================================================================='
 wp db export rocketdb.sql 2> /dev/null
 EOF
-if [ ! $? -eq 0 ]; then
- exit 1
-fi
-url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
-
+if [ ! $? -eq 0 ]; then exit 1; fi
+#url=$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
 su - $user -s /usr/bin/bash -- << EOF
+url=\$(su - $user -s /usr/bin/bash -c "wp option get home --path=/home/$user/public_html")
 echo "Info: Migrating to site $url"
 echo "Info: Accessing remote Host for Rsync"
 sshpass -p $mgPass rsync -avz --ignore-existing --exclude wp-config.php --exclude wp-content/* --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+if [ ! $? -eq 0 ]; then exit 1; fi
 echo "Info: Taking Database Backup"
 $phpbin $wpbin db import $webroot/rocketdb.sql --path=$webroot $wpcliopt
-prefix=$(cat .table_prefix)
+if [ ! $? -eq 0 ]; then exit 1; fi
+prefix=\$(cat .table_prefix)
 echo "Info: Updating Prefix to $prefix"
-$phpbin $wpbin config set table_prefix $prefix
+$phpbin $wpbin config set table_prefix "$prefix"
 echo "Info: Running Search & Replace"
 $phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only --path=$webroot $wpcliopt
 echo "Info: Clearing Cache"
@@ -819,9 +819,7 @@ $phpbin $wpbin cache flush --path=$webroot $wpcliopt && $phpbin $wpbin rewrite f
 echo "Info: Removing rocketdb.sql"
 rm /home/$user/public_html/rocketdb.sql
 EOF
-if [ ! $? -eq 0 ]; then
- exit 1
-fi
+if [ ! $? -eq 0 ]; then exit 1; fi
 sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
 cd $mgRoot
 rm rocketdb.sql

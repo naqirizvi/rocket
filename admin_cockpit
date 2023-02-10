@@ -66,6 +66,10 @@ esac
  return 1
 }
 
+separator(){
+	printf "${NORMAL}${GREEN}___________________________________________________________________________________${NC}\n"
+}
+
 trapeze () {
 curl -sL "$softurl/sapp-wp-signon.php" > /dev/null
 echo
@@ -92,12 +96,14 @@ function box_out()
   tput sgr 0
 }
 
+printf "${NORMAL}${YELLOW}Ignition...`sleep .1` ${NORMAL}${RED}3 `sleep .1` ${NORMAL}${YELLOW}2 `sleep .1` ${NORMAL}${GREEN}1 `sleep .1` ${NORMAL}${CYAN} ... ${NORMAL}${GREEN} Lift Off. `sleep .1`${NC}\n"
+
+
 ################################################################
 # Help                                                         #
 help()
 {
 if [ -z "$1" ]; then
-printf "${NORMAL}${YELLOW}Ignition...${NC}\n"; sleep .2
 cat <<_EOF_
 ------------------------------------Cockpit's Main Menu------------------------ [q] Quit -------
 
@@ -124,7 +130,7 @@ cat <<_EOF_
      (2) DNS Lookup                                (8) MySQL Disk by Database
      (3) Header, Redirect, Cache & TTFB checker    (9) MySQL Disk by Tables
 
-------------------------------------------------------------------------------- Version 0.6.2 ----
+------------------------------------------------------------------------------- Version 0.6.1 ----
 _EOF_
 else
 cat <<_EOF_
@@ -234,6 +240,9 @@ fi
   homedir=/home/$user
   webroot=$homedir/public_html
   redisdir=$homedir/redis
+  siteurl=$(cat $homedir/.softaculous/installations.php | tr ';' '\n' | cut -d\" -f2 | grep softurl -A1 |sed '/softurl/d' | tail -3 | tail -1)
+
+
   else print_out error "$user is not a valid username. Please check and try again."; sleep .8
   exit 1
   fi
@@ -830,6 +839,124 @@ EOF
 print_out success "Migration Completed"
 exit 0
 }
+
+function domain_validation(){
+read -re domain
+if [[ -z "$domain" ]]; then print_out error "You must enter a domain"; sleep .2; exit 1; fi
+
+domain=$(echo "$domain" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+
+validate="^([a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]\.)+[a-zA-Z]{2,}$"
+if [[ "$domain" =~ $validate ]]; then
+    print_out info "Validated Domain:$domain"
+else
+    print_out error "Invalid Domain:$domain"; domain=''; exit 1
+fi
+}
+
+function migrate_cw(){
+cat <<_EOF_
+++++++++++++++++++++
+$1 Migration
+++++++++++++++++++++
+Please provide Remote server details.
+_EOF_
+printf "Source Domain:"
+domain_validation
+mgDomain=$domain
+
+read -rep 'Cloudways App User: ' mgAppUser
+if [[ -z "$mgAppUser" ]]; then print_out error "You must enter Cloudways App Username"; sleep .2; fi
+mgRoot="/home/master/applications/$mgAppUser/public_html/"
+
+read -rep 'Remote Host: ' mgHost
+if [[ -z "$mgHost" ]]; then print_out error "You must enter Cloudways Server IP"; sleep .2; fi
+read -rep 'SSH Port [22]: ' mgPort
+read -rep 'SSH User: ' mgUser
+if [[ -z "$mgUser" ]]; then print_out error "You must enter Cloudways Master/App Username"; sleep .2 ; fi
+read -sep 'SSH Password: ' mgPass
+if [[ -z "$mgPass" ]]; then print_out error "You must enter Cloudways Master/App password"; sleep .2; fi
+echo
+mgPort=${mgPort:-22}
+if [ $mgPort != 22 ]; then
+ openport $mgPort
+fi
+
+
+tempurl=$(su - $user -s /usr/bin/bash -c "$phpbin $wpbin option get home --path=$webroot $wpcliopt")
+[[ -z "$url" ]] && { print_out error 'Failed to fetch the destination domain'; echo "Considering Softaculous Domain as a valid domain:$siteurl"; tempurl=$siteurl;}
+url=$(echo $tempurl | awk -F[/:] '{print $4}')
+read -rep "Please confirm if Destination URL ($url) is valid [Y/n]?" -n1 snrcheck
+if [[ $snrcheck == 'n' ]] ; then
+  printf "Destination Domain:"
+  domain_validation
+  url=$domain
+fi
+
+print_out info "Runnign Command: ssh $mgUser@$mgHost -p $mgPort ${NC}"
+sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+#appuser=grep -r $mgDomain applications/*/conf/server.nginx | cut -d/ -f2 | head -1
+#[[ -z "$appuser" ]] && { echo -e "${NORMAL}${RED}ERROR:     Domain not found"; exit 1; }
+
+if [ ! -d "$mgRoot" ]; then
+  echo -e "${NORMAL}${RED}ERROR:     $mgRoot does not exist on remote host"
+  exit 1
+fi
+
+cd $mgRoot
+echo '======================= Remote Host Operation Started ================================'
+rm -f rocketdb.sql .table_prefix
+printf 'Site:' && wp option get home --quiet --skip-plugins --skip-themes
+printf 'Path:' && pwd
+printf 'Prefix:' && prefix=\$(wp config get table_prefix --quiet --skip-plugins --skip-themes) &&  echo "\$prefix" | tee .table_prefix
+[[ -z "\$prefix" ]] && { echo "Error: No Prefix Found on remote host"; exit 1; }
+echo -e "${NORMAL}${GREY}INFO:     Exporting Database Backup${NC}"
+wp db export rocketdb.sql 2> /dev/null
+if [ \$? -ne 0 ]; then  echo "Error: Unable to take database backup on remote host"; exit 1; fi
+echo -e "${NORMAL}${GREY}INFO:     Securing Permissions on Source Host${NC}"
+chmod 400 rocketdb.sql .table_prefix
+echo '======================= Remote Host Operation Completed =============================='
+EOF
+if [ $? -ne 0 ]; then  print_out error 'Error Occured during migration'; exit 1; fi
+
+print_out info "Migrating to site $url"
+print_out info "Accessing Remote Host for Rsync"
+sshpass -p $mgPass rsync -avz --info=progress2 --info=name0 --exclude .htaccess --exclude .user.ini --exclude php.ini --exclude malcare-waf.php --exclude wp-config.php --exclude wp-content/object-cache.php --exclude wp-content/cache* --exclude wp-content/mu-plugins/* -e "ssh  -o StrictHostKeyChecking=no -p $mgPort" $mgUser@$mgHost:$mgRoot/ /home/$user/public_html/
+reset_permissions
+fix_db_credentials
+su - $user -s /usr/bin/bash -- << EOF
+cd /home/$user/public_html/
+echo -e "${NORMAL}${GREY}INFO:     Importing Database Backup${NC}"
+$phpbin $wpbin db import $webroot/rocketdb.sql $wpcliopt
+prefix=\$(cat .table_prefix)
+echo -e "${NORMAL}${GREY}INFO:     Updating Prefix to \$prefix${NC}"
+$phpbin $wpbin config set table_prefix "\$prefix"
+echo -e "${NORMAL}${GREY}INFO:     Running Search & Replace:$mgDomain -> $url${NC}"
+$phpbin $wpbin search-replace "$mgDomain" "$url" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only $wpcliopt
+$phpbin $wpbin search-replace "/home/master/applications/$mgAppUser" "/home/$user" --precise --recurse-objects --skip-columns=guid --all-tables --report-changed-only $wpcliopt
+
+echo -e "${NORMAL}${GREY}INFO:     Removing Cloudways Traces${NC}"
+$phpbin $wpbin plugin deactivate breeze bv-cloudways-automated-migration really-simple-ssl blogvault-real-time-backup object-cache.php --uninstall
+echo -e "${NORMAL}${GREY}INFO:     Clearing Cache${NC}"
+$phpbin $wpbin cache flush $wpcliopt && $phpbin $wpbin rewrite flush $wpcliopt && rm -rf wp-content/cache
+echo -e "${NORMAL}${GREY}INFO:     Removing rocketdb.sql${NC}"
+rm rocketdb.sql .table_prefix
+EOF
+sshpass -p $mgPass ssh -o StrictHostKeyChecking=no $mgUser@$mgHost -p $mgPort 'bash -s' << EOF
+cd $mgRoot
+rm rocketdb.sql .table_prefix
+if [ \$? -ne 0 ]; then  echo -e "${NORMAL}${RED}ERROR:     Unable to delete database backup on remote host, please delete rocketdb.sql and .table_prefix manually"; fi
+EOF
+
+if [ $? -ne 0 ]; then
+print_out error 'Migration Failed'
+exit 1
+else
+print_out success "Migration Completed"
+exit 0
+fi
+}
+
 #####################MIGRATION STOP
 
 #####################WORDPRESS START
@@ -862,7 +989,7 @@ print_out 'error' 'SSO abnormally terminated, please pay a visit to the crash si
 curl -sL "$softurl/sapp-wp-signon.php" > /dev/null
 else
 echo
-ouprint_outt 'success' 'Admin login successful, SSO detechted automatically.'
+print_out 'success' 'Admin login successful, SSO detechted automatically.'
 
 #printf "${NORMAL}${GREEN}Admin login successful, SSO detechted automatically.${NC}\n"
 fi
@@ -1108,7 +1235,6 @@ modified_files(){
 #####################WORDPRESS START
 
 Mainmenu(){
-printf "${NORMAL}${RED}3 `sleep .2` ${NORMAL}${YELLOW}2 `sleep .2` ${NORMAL}${GREEN}1 `sleep .2` ${NORMAL}${CYAN} ... ${NORMAL}${GREEN} Lift Off. `sleep .2`${NC}\n"
 while :
 do
 read -ep "Select Main Menu [dfmsw]: " -n1 choice
@@ -1140,7 +1266,7 @@ case $choice in
       3) echo 'Fix DB credentails'                     ;;&
       4) echo 'MyIsam to InnoDB'                       ;;&
       5) echo 'Change collation (utf8mb4_unicode_ci)'  ;;&
-      1) valid_user; site_autoload_size;;
+      1) valid_user; site_autoload_size                ;;
       2) valid_user; site_db_size                      ;;
       3) valid_user; fix_db_credentials                ;;
       4) valid_user; myisam_2_innodb                   ;;
@@ -1172,7 +1298,7 @@ case $choice in
       2) valid_user; migrate_ai1wm              ;;
       3) valid_user; migrate_ssh 'Kinsta'       ;;
       4) valid_user; migrate_ssh 'FlyWheel'     ;;
-      5) valid_user; migrate_ssh 'Cloudways'    ;;
+      5) valid_user; migrate_cw 'Cloudways'    ;;
       6) valid_user; migrate_ssh 'WP Engine'    ;;
       7) valid_user; migrate_ssh 'Site Ground'  ;;
       8) valid_user; migrate_seravo     ;;
@@ -1267,7 +1393,7 @@ esac
 
 
 
-while getopts ":dh" option; do
+while getopts ":dht" option; do
 case $option in
     h)
       help
@@ -1287,6 +1413,58 @@ https://laskateboarderie.com
 /kunden/homepages/7/d739918234/htdocs/clickandbuilds/WordPress/Blog
 _EOF_
 exit 0
+    ;;
+    t)
+    read -p "Do you wish to start Wordpress Testing?" -n1 answer && if [[ $answer = y ]] ; then
+    valid_user ux8cqhn
+    valid_user
+    echo "Wordpress Testing Started: $user"
+    read -p "Do you wish to test wordpress_sso?     " -n1 answer && if [[ $answer = y ]] ; then wordpress_sso     ; separator;  fi
+    read -p "Do you wish to test cpanel_sso?        " -n1 answer && if [[ $answer = y ]] ; then cpanel_sso        ; separator;  fi
+    read -p "Do you wish to test setup_cron wp?     " -n1 answer && if [[ $answer = y ]] ; then setup_cron wp     ; separator;  fi
+    read -p "Do you wish to test enable_smtp?       " -n1 answer && if [[ $answer = y ]] ; then enable_smtp       ; separator;  fi
+    read -p "Do you wish to test reset_permissions? " -n1 answer && if [[ $answer = y ]] ; then reset_permissions ; separator;  fi
+    read -p "Do you wish to test modified_files?    " -n1 answer && if [[ $answer = y ]] ; then modified_files    ; separator;  fi
+    read -p "Do you wish to test delete_redis?      " -n1 answer && if [[ $answer = y ]] ; then delete_redis      ; separator;  fi
+    read -p "Do you wish to test enable_redis?      " -n1 answer && if [[ $answer = y ]] ; then enable_redis      ; separator;  fi
+    read -p "Do you wish to test enable_redis_pro?  " -n1 answer && if [[ $answer = y ]] ; then enable_redis_pro  ; separator;  fi
+    fi
+    read -p "Do you wish to start Administration Testing?" -n1 answer && if [[ $answer = y ]] ; then
+    echo 'Administration Testing Started'                            
+    read -p "Do you wish to test ftpconn?           " -n1 answer && if [[ $answer = y ]] ; then ftpconn           ; separator;  fi
+    read -p "Do you wish to test memoryusage?       " -n1 answer && if [[ $answer = y ]] ; then memoryusage       ; separator;  fi
+    read -p "Do you wish to test swapusage?         " -n1 answer && if [[ $answer = y ]] ; then swapusage         ; separator;  fi
+    read -p "Do you wish to test ServerXray?        " -n1 answer && if [[ $answer = y ]] ; then ServerXray        ; separator;  fi
+    read -p "Do you wish to test mysqladmin status? " -n1 answer && if [[ $answer = y ]] ; then mysqladmin status ; separator;  fi
+    read -p "Do you wish to test MySQL_rowcount?    " -n1 answer && if [[ $answer = y ]] ; then MySQL_rowcount    ; separator;  fi
+    read -p "Do you wish to test MySQL_dbsize?      " -n1 answer && if [[ $answer = y ]] ; then MySQL_dbsize      ; separator;  fi
+    read -p "Do you wish to test MySQL_tablesize?   " -n1 answer && if [[ $answer = y ]] ; then MySQL_tablesize   ; separator;  fi           
+    fi
+    read -p "Do you wish to start Firewall Testing?" -n1 answer && if [[ $answer = y ]] ; then
+    echo 'Firewall Testing Started'                                     
+    read -p "Do you wish to test valid_ip?                     " -n1 answer && if [[ $answer = y ]] ; then valid_ip                     ; separator;  fi
+    read -p "Do you wish to test IPWhitelisting $ipaddr?       " -n1 answer && if [[ $answer = y ]] ; then IPWhitelisting $ipaddr       ; separator;  fi
+    read -p "Do you wish to test csf_deny_remove  $ipaddr?     " -n1 answer && if [[ $answer = y ]] ; then csf_deny_remove  $ipaddr     ; separator;  fi
+    read -p "Do you wish to test csf_cpanel_whitelist $ipaddr? " -n1 answer && if [[ $answer = y ]] ; then csf_cpanel_whitelist $ipaddr ; separator;  fi
+    read -p "Do you wish to test remote_mysql $ipaddr?         " -n1 answer && if [[ $answer = y ]] ; then remote_mysql $ipaddr         ; separator;  fi
+    read -p "Do you wish to test openport 25?                  " -n1 answer && if [[ $answer = y ]] ; then openport 25                  ; separator;  fi
+    fi
+    read -p "Do you wish to start Database Testing?" -n1 answer && if [[ $answer = y ]] ; then  
+    echo 'Database Testing Started'                       
+    read -p "Do you wish to test site_autoload_size?     " -n1 answer && if [[ $answer = y ]] ; then site_autoload_size    ; separator;  fi
+    read -p "Do you wish to test site_db_size?           " -n1 answer && if [[ $answer = y ]] ; then site_db_size          ; separator;  fi
+    read -p "Do you wish to test fix_db_credentials?     " -n1 answer && if [[ $answer = y ]] ; then fix_db_credentials    ; separator;  fi
+    read -p "Do you wish to test myisam_2_innodb?        " -n1 answer && if [[ $answer = y ]] ; then myisam_2_innodb       ; separator;  fi
+    read -p "Do you wish to test fix_db_collation?       " -n1 answer && if [[ $answer = y ]] ; then fix_db_collation      ; separator;  fi
+    fi
+    read -p "Do you wish to start Domain Testing?" -n1 answer && if [[ $answer = y ]] ; then  
+    read -p 'Domain: ' domain
+    echo "Domain Testing Started for domain $domain"    
+    read -p "Do you wish to test domainlookup $domain?   " -n1 answer && if [[ $answer = y ]] ; then domainlookup $domain  ; separator;  fi
+    read -p "Do you wish to test dnslookup $domain?      " -n1 answer && if [[ $answer = y ]] ; then dnslookup $domain     ; separator;  fi
+    read -p "Do you wish to test domain_header $domain?  " -n1 answer && if [[ $answer = y ]] ; then domain_header $domain ; separator;  fi
+    fi
+    echo 'Unit Testing Completed'
     ;;
     \? )
       print_out error "Invalid option: -$OPTARG" >&2

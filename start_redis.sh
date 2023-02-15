@@ -4,5 +4,5 @@ then
   echo 'Redis is already running'
 else
   echo 'Starting Redis'
-  screen -L -Logfile screen_redis.log -d -m /usr/bin/redis-server REDISDIR/redis.conf
+  screen -L -Logfile screen_redis.log -S redis -d -m /usr/bin/redis-server REDISDIR/redis.conf
 fi

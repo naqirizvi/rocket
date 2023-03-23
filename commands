@@ -1,0 +1,5 @@
+Clear Disk
+#for i in $(find /home -type f -iname error_log -size +499M);do : > $i;done
+
+#rm -rfv /home/*/error_log
+#rm -rfv /home/*/public_html/error_log

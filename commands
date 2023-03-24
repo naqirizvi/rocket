@@ -1,5 +1,15 @@
 Clear Disk
+
+First, get a list of the backups and see if there are a large number (greater than 2 or 3):
+List softaculous backups
+#for user in $(cut -d: -f2 /etc/userdomains); do find /home/$user/softaculous_backups  -name "*.gz"  -ctime +1 -exec echo rm -f  {} \; 2>/dev/null ;done
+Delete softaculous backups
+#for user in $(cut -d: -f2 /etc/userdomains); do find /home/$user/softaculous_backups  -name "*.gz"  -ctime +1 -exec echo rm -f  {} \; 2>/dev/null ;done | bash
+
 #for i in $(find /home -type f -iname error_log -size +499M);do : > $i;done
 
 #rm -rfv /home/*/error_log
 #rm -rfv /home/*/public_html/error_log
+
+cd /home/
+find . -size +500M -exec ls -lh {} \; | awk '{ print $5" "$9 }' 

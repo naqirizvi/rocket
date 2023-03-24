@@ -12,4 +12,4 @@ Delete softaculous backups
 #rm -rfv /home/*/public_html/error_log
 
 cd /home/
-find . -size +500M -exec ls -lh {} \; | awk '{ print $5" "$9 }' 
+find . -size +500M -exec ls -lh {} \;  2>/dev/null | awk '{ print $5" "$9 }' 

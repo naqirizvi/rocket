@@ -13,3 +13,16 @@ Delete softaculous backups
 
 cd /home/
 find . -size +500M -exec ls -lh {} \;  2>/dev/null | awk '{ print $5" "$9 }' 
+
+
+for user in `ls /var/cpanel/users`; do rm -f /home/$user/public_html/wp-content/debug.log; done
+for user in `ls /var/cpanel/users`; do rm -rf /home/$user/public_html/wp-content/ai1wm-backups; done
+for user in `ls /var/cpanel/users`; do rm -f /home/$user/public_html/error_log; done
+for user in `ls /var/cpanel/users`; do rm -f /home/$user/public_html/wp-admin/error_log; done
+for user in `ls /var/cpanel/users`; do rm -rf /home/$user/logs; done
+for user in `ls /var/cpanel/users`; do rm -f /home/$user/public_html/wp-admin/error_log; done
+for user in `ls /var/cpanel/users`; do rm -rf /home/$user/mail/new; done
+for user in `ls /var/cpanel/users`; do rm -rf /home/$user/public_html/wp-content/updraft; done
+for user in $(cut -d: -f2 /etc/userdomains); do find /home/$user/softaculous_backups  -name "*.gz"  -ctime +1 -exec echo rm -f  {} \; 2>/dev/null ;done | bash
+
+topusers=$(whmapi1 --output=jsonpretty   get_disk_usage | jq -r .data.accounts | jq   '.[] | .user, .blocks_used' -Sr | paste - - -d" " | awk -v OFMT="%2.2f%" '{ printf "%.2f%s\n",$2/1024/1024,"GB," $1 }'  | sort -n | tail -020 ); for user in $topusers; do space=$(echo $user| cut -d, -f1); user=$(echo $user | cut -d, -f2); domain=$(grep $user /etc/userdomains |sed -e '/site/d'| cut -d: -f1);if [ -z $domain ] ; then domain=$(grep $user /etc/userdomains | tail -1 | cut -d: -f1) ;fi;  echo $space" "$user" "$domain;done

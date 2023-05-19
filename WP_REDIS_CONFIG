@@ -1,0 +1,10 @@
+define('WP_REDIS_CONFIG', [
+    'token' => '9489c9b05ea4d20cab4613259ae01fc3053459dc385b8dbcc746efda3e41',
+    'host' => '/home/USERNAME/redis/redis.sock',
+    'database' => 0, // change for each site
+    'maxttl' => 3600 * 24 * 7, // 7 days
+    'timeout' => 1.0,
+    'read_timeout' => 1.0,
+    'split_alloptions' => false,
+    'debug' => false,
+]);

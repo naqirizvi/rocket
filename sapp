@@ -82,8 +82,63 @@ if (!is_user_logged_in()){
       if (!empty($user_query->get_results()))
       {
       ?>
+	  <head>
+        <style>
+          /* Center the form */
+          body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f1f1f1;
+            font-family: Arial, sans-serif; /* Added font family */
+          }
+      
+          /* Add some styles to the form */
+          form {
+            width: auto; /* Changed width to auto for dynamic width */
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            display: flex; /* Added to enable flex layout */
+            flex-direction: column; /* Added to stack elements vertically */
+            align-items: center; /* Added to center elements horizontally */
+          }
+      
+          /* Add heading styles */
+          h2 {
+            margin-bottom: 20px;
+          }
+      
+          /* Customize the button */
+          input[type="submit"] {
+            background-color: blue;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px; /* Added margin to separate from dropdown */
+            font-family: Arial, sans-serif; /* Added font family */
+          }
+      
+          /* Customize the dropdown */
+          select {
+            width: auto; /* Changed width to auto for dynamic width */
+            padding: 12px 20px;
+            margin: 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif; /* Added font family */
+          }
+        </style>
+      </head>      
       <body>
         <form method="post">
+		  <h2>Login to Wp-Admin</h2> <!-- Added heading -->
           <select name="user_id" id="user_id">
           <option selected="selected">Choose one</option>
           <?php

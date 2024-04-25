@@ -1,0 +1,12 @@
+<?php
+//Config added by Cockpit
+define('WP_REDIS_CONFIG', [
+    'token' => 'OCP_KEY',
+    'host' => '/home/USERNAME/redis/redis.sock',
+    'database' => REDIS_DB, // change for each site
+    'maxttl' => 3600 * 24 * 7, // 7 days
+    'timeout' => 1.0,
+    'read_timeout' => 1.0,
+    'split_alloptions' => false,
+    'debug' => false,
+]);

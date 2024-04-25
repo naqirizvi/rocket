@@ -1,4 +1,3 @@
-<?php
 //Config added by Cockpit
 define('WP_REDIS_CONFIG', [
     'token' => 'OCP_KEY',

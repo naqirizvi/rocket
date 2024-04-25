@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo 'Mayday! Ryan is pushing updates for FPM as well so revisit next time.'
-die
+exit
 # PHPTOP 2.0.2
 # 2022-2024 Ryan Flowers for Rocket.net 
 # 

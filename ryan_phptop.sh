@@ -57,9 +57,9 @@ fi
 wppreload=$(echo $wpplist | grep  $domain -l >/dev/null 2>&1  && echo -e "\e[41mWP-Rocket-Preload\e[0m" )
 
 #Format output with printf, and print a header
-echo "## Username  Domain Name              PHP Handler  Flags"
-echo "   -------- ------------------------  -----------  -----------------"
-printf "%-2s %-8s %-25s %-12s %-20s\n"  $puser $luser  $domain $huser $wppreload
+echo "## Username  Domain Name                        PHP Handler  Flags"
+echo "   -------- ----------------------------------  -----------  -----------------"
+printf "%-2s %-8s %-35s %-12s %-20s\n"  $puser $luser  $domain $huser $wppreload
 
 #gather stats from NGINX access log and format/display with printf
 printf "\n"

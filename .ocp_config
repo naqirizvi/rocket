@@ -1,4 +1,4 @@
-//Config added by Cockpit
+//Config added by Object Cache Pro
 define('WP_REDIS_CONFIG', [
     'token' => 'OCP_KEY',
     'host' => '/home/USERNAME/redis/redis.sock',

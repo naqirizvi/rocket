@@ -1,0 +1,194 @@
+#!/bin/bash
+
+# Function to print interval at top right
+print_interval() {
+    tput cup 0 $(($(tput cols) - ${#INTERVAL_MESSAGE} - 1))
+    echo "$INTERVAL_MESSAGE"
+}
+
+# Function to print static system information at the bottom
+print_static_info() {
+    tput cup $(($(tput lines) - 2)) 0
+    echo "Kernel: $KERNEL_VERSION | Number of Processors: $NUM_PROCESSORS | $SYS_MEMORY | Nginx: $NGINX_PROC | Apache: $APACHE_PROC | PHP-FPM: $PHP_FPM | LSPHP: $LSPHP"
+}
+
+# Function to clean up before exiting
+cleanup() {
+    # Clear the screen
+    clear
+    # Reset terminal to its initial state
+    stty sane
+    # Show cursor
+    tput cnorm
+    exit 0
+}
+
+# Trap exit signal and call cleanup function
+trap cleanup EXIT
+
+# Default interval in seconds
+INTERVAL_SECONDS=5
+
+# Parse command-line options
+while getopts ":t:" opt; do
+  case ${opt} in
+    t )
+      INTERVAL_SECONDS=$OPTARG
+      ;;
+    \? )
+      echo "Usage: $0 [-t interval_seconds]" 1>&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+# Set initial interval
+INTERVAL=$INTERVAL_SECONDS
+
+# MySQL configuration file
+MYSQL_CONF="/root/.my.cnf"
+
+# Function to extract MySQL credentials
+extract_credentials() {
+    if [[ -f "$MYSQL_CONF" ]]; then
+        USER=$(grep -E '^user=' "$MYSQL_CONF" | awk -F= '{print $2}')
+        PASSWORD=$(grep -E '^password=' "$MYSQL_CONF" | awk -F= '{print $2}')
+        HOST=$(grep -E '^host=' "$MYSQL_CONF" | awk -F= '{print $2}')
+    else
+        echo "MySQL configuration file not found at $MYSQL_CONF"
+        exit 1
+    fi
+}
+
+# Extract credentials
+extract_credentials
+
+# Default to localhost if no host is specified in the config file
+HOST=${HOST:-localhost}
+
+# Ensure that credentials are available
+if [[ -z "$USER" || -z "$PASSWORD" ]]; then
+    echo "Error: Unable to extract MySQL credentials from $MYSQL_CONF"
+    exit 1
+fi
+
+# Create a temporary options file for mysql
+OPTIONS_FILE=$(mktemp)
+echo "[client]" > $OPTIONS_FILE
+echo "user=$USER" >> $OPTIONS_FILE
+echo "password=$PASSWORD" >> $OPTIONS_FILE
+echo "host=$HOST" >> $OPTIONS_FILE
+
+# SQL query to get users with more than 3 connections
+SQL_QUERY="SELECT SUBSTRING_INDEX(db, '_', 1) AS user, db, COUNT(*) AS connections \
+FROM information_schema.processlist \
+WHERE db IS NOT NULL \
+GROUP BY db \
+ORDER BY connections DESC;"
+
+# Static system information
+KERNEL_VERSION=$(uname -r)
+NUM_PROCESSORS=$(nproc)
+SYS_MEMORY=$(free -g | awk '/^Mem:/ {printf "Memory Usage: %dGB / %dGB (%.2f%%)\n", $3, $2, $3*100/$2}')
+NGINX_PROC=$(ps -u nginx -C nginx --no-headers | wc -l)
+APACHE_PROC=$(ps -C  httpd  --no-headers | wc -l)
+PHP_FPM=$(ps  -C 'php-fpm' --no-headers | wc -l)
+LSPHP=$(ps aux --no-headers | grep lsphp | wc -l )
+
+# Function to execute SQL query and append usage stats and domain
+execute_query(){
+    RESULT=$(mysql --defaults-extra-file=$OPTIONS_FILE -BNe "$SQL_QUERY" 2>&1 )
+    if echo "$RESULT" | grep -q "ERROR"; then
+        echo "MySQL query failed: $RESULT"
+        exit 1
+    fi
+    # Skip header for processing and add MEM, CPU, and Domain columns
+    #RESULT=$(echo "$RESULT" | awk 'NR==1 {print $0, "MEM(MB)", "CPU(%)", "Domain"} NR>1' | fetch_usage_stats)
+    RESULT=$(echo "$RESULT" | fetch_usage_stats)
+}
+
+function main(){
+# Initial execution of the query
+execute_query
+
+# Check if the RESULT is not empty
+if [ -n "$RESULT" ]; then
+    print_results
+else
+    echo "No users have MySQL connections."
+fi
+
+# Print static information
+print_static_info
+# Real-time updating
+while true; do
+    INTERVAL=$((INTERVAL - 1))
+    INTERVAL_MESSAGE="Refreshing results in $INTERVAL seconds"
+    print_interval
+    sleep 1
+    if [ $INTERVAL -eq 0 ]; then
+        INTERVAL=$INTERVAL_SECONDS
+        execute_query
+        if [ -n "$RESULT" ]; then
+            print_results
+        else
+            echo "No users have MySQL connections."
+        fi
+        # Print static information
+        print_static_info
+    fi
+done
+
+# Cleanup temporary options file
+rm $OPTIONS_FILE
+}
+
+# Function to print results
+print_results(){
+    # Clear screen
+    clear
+    # Print header
+    printf "%-7s | %-15s | %-10s | %-8s | %-7s | %-32s | %-7s | %-7s | %-5s\n" "User" "Database" "DB Connect" "MEM (MB)" "CPU %" "Domain" "Hits" "Handler" "PHP"
+    # Print separator
+    printf "%s\n" "---------------------------------------------------------------------------------------------------------------------------"
+    # Print rows
+    echo "$RESULT" | awk '{ printf "%-7s | %-15s | %-10s | %-8s | %-7s | %-32s | %-7s | %-7s | %-5s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11 }'
+    #echo "$RESULT" | awk 'NR>1 { printf "%-7s | %-15s | %-10s | %-10s | %-5s | %-25s | %-5s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9,$10}'
+}
+
+get_user_info(){
+    local user=$1
+    # Get memory and CPU usage
+    local usage=$(ps --no-headers -o rss -u $user | awk '{sum+=$1} END {printf "%.0f", sum/1024}')
+    local cpu=$(ps --no-headers -o %cpu -u $user | awk '{sum+=$1} END {print sum}')    
+    # Get domain
+    local domain=$(grep $user /etc/userdomains | cut -d: -f1 | sed -e '/onrocket/d' -e '/wpdns/d' | head -1)
+        local hits=$(grep -c $domain /var/log/nginx/access.log)
+    #local lsphp=$(ps -u $user | grep lsphp | wc -l)
+#    local lsphp=$(ps -u $user -C php/-fpm | wc -l)
+# Retrieve the PHP handler type for the user
+    local huser=$(if $(uapi --output=jsonpretty --user=$user LangPHP php_get_vhost_versions | grep '\"php_fpm\" : 1' >/dev/null); then echo php_fpm; else echo lsphp; fi)
+
+# Check the number of running PHP processes based on the handler type
+if [ "$huser" = "php_fpm" ]; then
+    lsphp=$(ps -u $user -C 'php\-fpm' --no-headers | wc -l)
+else
+    lsphp=$(ps -u $user --no-headers | grep lsphp | wc -l)
+fi
+
+        # local post=$(grep $domain /var/log/nginx/access.log | grep 'POST' | wc -l)
+        # local get=$(grep $domain /var/log/nginx/access.log | grep 'GET' | wc -l)
+    # Combine the results
+    echo "$usage $cpu $domain $hits $huser $lsphp"
+}
+
+fetch_usage_stats(){
+    while read -r line; do
+        user=$(echo "$line" | awk '{print $1}')
+        user_info=$(get_user_info "$user")
+        echo "$line $user_info"
+    done <<< "$RESULT"
+}
+
+main

@@ -2,7 +2,7 @@
 define('WP_REDIS_CONFIG', [
     'token' => 'OCP_KEY',
     'host' => '/home/USERNAME/redis/redis.sock',
-    'database' => REDIS_DB, // change for each site
+    'database' => REDIS_DB,
     'maxttl' => 3600 * 24 * 7,
     'timeout' => 1.0,
     'read_timeout' => 1.0,

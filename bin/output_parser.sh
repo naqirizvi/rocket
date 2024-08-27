@@ -21,6 +21,10 @@ parse_output() {
       fi
       ;;
 
+    "version")
+      echo '0.0.1';
+    ;;
+
     *)
       echo "Invalid input"
       exit 1

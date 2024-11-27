@@ -1,22 +1,28 @@
 <?php
-if ($_GET['pass'] != 'SECRET')
-{
-  @unlink(__FILE__);
-  die("Unauthorized Access");
+$secure_pass = 'SECRET';
+if (!isset($_GET['pass']) || $_GET['pass'] !== $secure_pass) {
+    @unlink(__FILE__); // Deletes the script file
+    die("Unauthorized Access"); // Stops further execution
 }
+
 if (isset($_POST['SubmitButton'])){
  @unlink(__FILE__);
 }
+
 // Dummy plugin dir so that no plugins are loaded as they conflict with our login process
+define('WP_USE_THEMES', false);
 define('WPMU_PLUGIN_DIR', '/home/x11kccb/public_html/n9ssxezpiewgnhkkbd3yyduz9uaechzr');
 define('WP_PLUGIN_DIR', '/home/x11kccb/public_html/n9ssxezpiewgnhkkbd3yyduz9uaechzr');
-define('WP_USE_THEMES', false);
 
 // Some themes check the current login script name
 $_SERVER['SCRIPT_NAME'] = '/wp-login.php';
 
-require ('wp-blog-header.php');
-require ('wp-includes/pluggable.php');
+// Load only the necessary WordPress components
+require_once 'wp-load.php'; // Minimal WP loading
+require_once ABSPATH . 'wp-includes/pluggable.php'; // Include pluggable functions
+
+//require ('wp-blog-header.php');
+//require ('wp-includes/pluggable.php');
 
 // If the user is already logged in simply redirect to admin page
 if (!is_user_logged_in()){
